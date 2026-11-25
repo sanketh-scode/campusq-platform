@@ -8,23 +8,31 @@ export default function CollegeAdminDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState('PENDING');
   const [vendors, setVendors] = useState([]);
+  const [complaints, setComplaints] = useState([]);
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [replyForm, setReplyForm] = useState({ status: 'RESOLVED', adminReply: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const loadVendors = async (activeTab = tab) => {
+  const loadData = async (activeTab = tab) => {
     setLoading(true);
     setError('');
     try {
-      let data;
-      if (activeTab === 'PENDING') {
-        data = await campusqApi.getAdminPendingVendors();
-      } else if (activeTab === 'APPROVED') {
-        data = await campusqApi.getAdminApprovedVendors();
+      if (activeTab === 'COMPLAINTS') {
+        const compData = await campusqApi.getAdminComplaints();
+        setComplaints(compData || []);
       } else {
-        data = await campusqApi.getAdminAllVendors();
+        let data;
+        if (activeTab === 'PENDING') {
+          data = await campusqApi.getAdminPendingVendors();
+        } else if (activeTab === 'APPROVED') {
+          data = await campusqApi.getAdminApprovedVendors();
+        } else {
+          data = await campusqApi.getAdminAllVendors();
+        }
+        setVendors(data || []);
       }
-      setVendors(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,19 +41,42 @@ export default function CollegeAdminDashboard() {
   };
 
   useEffect(() => {
-    loadVendors(tab);
+    loadData(tab);
   }, [tab]);
 
-  const handleAction = async (vendorId, action) => {
+  const handleVendorAction = async (vendorId, action, shopName) => {
     setError('');
     setSuccess('');
     try {
-      const updated =
-        action === 'approve'
-          ? await campusqApi.approveVendor(vendorId)
-          : await campusqApi.rejectVendor(vendorId);
-      setSuccess(`Vendor "${updated.shopName}" marked as ${updated.approvalStatus}.`);
-      loadVendors(tab);
+      if (action === 'delete') {
+        if (!window.confirm(`Reject and deactivate "${shopName}"? Their login will be disabled.`)) {
+          return;
+        }
+        await campusqApi.deactivateVendor(vendorId);
+        setSuccess(`Vendor "${shopName}" has been rejected and deactivated.`);
+      } else {
+        const updated =
+          action === 'approve'
+            ? await campusqApi.approveVendor(vendorId)
+            : await campusqApi.rejectVendor(vendorId);
+        setSuccess(`Vendor "${updated.shopName}" marked as ${updated.approvalStatus}.`);
+      }
+      loadData(tab);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSaveComplaintReply = async (e) => {
+    e.preventDefault();
+    if (!replyTarget) return;
+    setError('');
+    setSuccess('');
+    try {
+      await campusqApi.updateComplaint(replyTarget.id, replyForm);
+      setSuccess(`Complaint #${replyTarget.id} updated to ${replyForm.status}.`);
+      setReplyTarget(null);
+      loadData('COMPLAINTS');
     } catch (err) {
       setError(err.message);
     }
@@ -55,17 +86,24 @@ export default function CollegeAdminDashboard() {
     <>
       <Navbar />
       <main className="page-container">
-        <div className="page-header">
+        <section className="welcome-banner welcome-admin">
           <div>
+            <div className="college-pill">
+              🏛️ {user?.collegeName || user?.collegeCode} ({user?.collegeCode})
+            </div>
             <h1>College Admin Portal</h1>
-            <p className="page-subtitle">
-              Manage vendor approvals for <strong>{user?.collegeCode}</strong>
+            <p style={{ margin: 0, opacity: 0.9 }}>
+              Approve or remove campus vendors and resolve student complaints in your college.
             </p>
           </div>
-          <button className="btn btn-outline btn-sm" onClick={() => loadVendors(tab)}>
-            Refresh
+          <button
+            className="btn btn-outline btn-sm"
+            style={{ background: 'rgba(255,255,255,0.14)', color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}
+            onClick={() => loadData(tab)}
+          >
+            ↻ Refresh
           </button>
-        </div>
+        </section>
 
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
@@ -89,18 +127,67 @@ export default function CollegeAdminDashboard() {
           >
             All College Vendors
           </button>
+          <button
+            className={`tab-btn ${tab === 'COMPLAINTS' ? 'active' : ''}`}
+            onClick={() => setTab('COMPLAINTS')}
+          >
+            📣 Student Complaints
+          </button>
         </div>
 
         {loading ? (
-          <p className="muted">Loading vendors...</p>
+          <p className="muted">Loading...</p>
+        ) : tab === 'COMPLAINTS' ? (
+          complaints.length === 0 ? (
+            <div className="empty-state">No complaints submitted in your college yet.</div>
+          ) : (
+            <div className="grid-2">
+              {complaints.map((c) => (
+                <div key={c.id} className="card">
+                  <div className="row-between" style={{ marginBottom: 6 }}>
+                    <strong>{c.subject}</strong>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 6 }}>
+                    From: <strong>{c.studentName}</strong> ({c.studentEmail}) • Against:{' '}
+                    <strong>{c.vendorShopName}</strong>
+                    {c.orderId ? ` • Order #${c.orderId}` : ''}
+                  </div>
+                  <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{c.message}</p>
+                  {c.adminReply && (
+                    <div className="alert alert-success" style={{ padding: '8px 12px', marginBottom: 10 }}>
+                      <strong>Your Reply:</strong> {c.adminReply}
+                    </div>
+                  )}
+                  <div className="row-gap">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setReplyTarget(c);
+                        setReplyForm({ status: 'RESOLVED', adminReply: c.adminReply || '' });
+                      }}
+                    >
+                      Reply / Update Status
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleVendorAction(c.vendorId, 'delete', c.vendorShopName)}
+                    >
+                      Reject &amp; Disable Vendor
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : vendors.length === 0 ? (
-          <div className="empty-state">No vendors found in this category.</div>
+          <div className="empty-state">No vendors found in this tab.</div>
         ) : (
           <div className="grid-3">
             {vendors.map((v) => (
               <div key={v.vendorId} className="card">
                 <div className="row-between" style={{ marginBottom: 8 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.08rem' }}>{v.shopName}</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.06rem' }}>{v.shopName}</h3>
                   <StatusBadge status={v.approvalStatus} />
                 </div>
                 <p className="muted" style={{ margin: '0 0 8px' }}>
@@ -114,38 +201,97 @@ export default function CollegeAdminDashboard() {
                     <strong>Location:</strong> {v.location}
                   </div>
                   <div>
-                    <strong>Shop Open:</strong> {v.available ? 'Yes' : 'No'}
+                    <strong>Account:</strong> {v.active ? 'Active' : 'Deactivated'}
                   </div>
                 </div>
                 <div className="row-gap" style={{ marginBottom: 14 }}>
                   {(v.categories || []).map((cat) => (
                     <span key={cat} className="badge badge-primary">
-                      {cat}
+                      {cat === 'OTHER' && v.customCategory ? v.customCategory : cat}
                     </span>
                   ))}
                 </div>
 
-                {v.approvalStatus === 'PENDING' && (
-                  <div className="row-gap">
+                <div className="row-gap">
+                  {v.approvalStatus === 'PENDING' && (
+                    <>
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => handleVendorAction(v.vendorId, 'approve', v.shopName)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleVendorAction(v.vendorId, 'reject', v.shopName)}
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {v.active && (
                     <button
-                      className="btn btn-success btn-sm"
-                      onClick={() => handleAction(v.vendorId, 'approve')}
+                      className="btn btn-outline btn-sm"
+                      style={{ color: 'var(--danger)', borderColor: '#fecaca' }}
+                      onClick={() => handleVendorAction(v.vendorId, 'delete', v.shopName)}
                     >
-                      Approve
+                      Remove / Disable
                     </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleAction(v.vendorId, 'reject')}
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
         )}
       </main>
+
+      {replyTarget && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h2 style={{ marginTop: 0 }}>Resolve Complaint #{replyTarget.id}</h2>
+            <p className="muted">
+              Against <strong>{replyTarget.vendorShopName}</strong>
+            </p>
+            <form onSubmit={handleSaveComplaintReply}>
+              <div className="form-group">
+                <label>Status</label>
+                <select
+                  className="select"
+                  value={replyForm.status}
+                  onChange={(e) => setReplyForm({ ...replyForm, status: e.target.value })}
+                >
+                  <option value="RESOLVED">RESOLVED</option>
+                  <option value="DISMISSED">DISMISSED</option>
+                  <option value="OPEN">OPEN</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Resolution Message to Student</label>
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  placeholder="Describe the action taken..."
+                  value={replyForm.adminReply}
+                  onChange={(e) => setReplyForm({ ...replyForm, adminReply: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="row-gap">
+                <button type="submit" className="btn btn-primary">
+                  Save &amp; Notify Student
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setReplyTarget(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

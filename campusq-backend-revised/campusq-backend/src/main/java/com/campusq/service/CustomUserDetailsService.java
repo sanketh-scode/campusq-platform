@@ -2,7 +2,6 @@ package com.campusq.service;
 
 import com.campusq.entity.AppUser;
 import com.campusq.repository.UserRepository;
-
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -19,19 +18,16 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String email)
-            throws UsernameNotFoundException {
-
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         AppUser appUser = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found with email: " + email
-                        )
-                );
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "User not found with email: " + email
+                ));
 
         return User.builder()
                 .username(appUser.getEmail())
                 .password(appUser.getPassword())
+                .disabled(!appUser.isActive())
                 .roles(appUser.getRole().name())
                 .build();
     }

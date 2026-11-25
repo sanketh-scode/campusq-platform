@@ -24,6 +24,8 @@ public class ProductUpdateRequest {
     @PositiveOrZero(message = "Stock quantity cannot be negative")
     private Integer stockQuantity;
 
+    private String imageUrl;
+
     public String getName() {
         return name;
     }
@@ -54,5 +56,13 @@ public class ProductUpdateRequest {
 
     public void setStockQuantity(Integer stockQuantity) {
         this.stockQuantity = stockQuantity;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 }

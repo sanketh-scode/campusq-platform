@@ -38,10 +38,11 @@ public class VendorController {
     @GetMapping
     public ResponseEntity<List<VendorSummaryResponse>> browseCollegeVendors(
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) String search,
             Authentication authentication) {
 
         return ResponseEntity.ok(
-                vendorService.getAvailableVendorsForStudent(authentication.getName(), category)
+                vendorService.getAvailableVendorsForStudent(authentication.getName(), category, search)
         );
     }
 }

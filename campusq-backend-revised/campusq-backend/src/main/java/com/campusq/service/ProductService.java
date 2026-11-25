@@ -18,9 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class ProductService {
+
+    private static final int MAX_IMAGE_PAYLOAD_LENGTH = 3_000_000;
 
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
@@ -39,6 +42,7 @@ public class ProductService {
     @Transactional
     public ProductResponse addProduct(ProductRequest request, String vendorEmail) {
         Vendor vendor = getApprovedVendor(vendorEmail);
+        validateImageSize(request.getImageUrl());
 
         Product product = new Product();
         product.setVendor(vendor);
@@ -46,6 +50,11 @@ public class ProductService {
         product.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
         product.setPrice(request.getPrice());
         product.setStockQuantity(request.getStockQuantity());
+        product.setImageUrl(
+                request.getImageUrl() != null && !request.getImageUrl().isBlank()
+                        ? request.getImageUrl().trim()
+                        : null
+        );
         product.setAvailable(true);
 
         Product savedProduct = productRepository.save(product);
@@ -64,8 +73,11 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductResponse> getProductsForStudent(String studentEmail) {
-        AppUser student = getStudent(studentEmail);
+    public List<ProductResponse> getProductsForStudent(String studentEmail, String search) {
+        AppUser student = getStudentOrStaff(studentEmail);
+        String normalizedSearch = (search != null && !search.isBlank())
+                ? search.trim().toLowerCase(Locale.ROOT)
+                : null;
 
         return productRepository
                 .findAvailableProductsByCollege(
@@ -73,13 +85,18 @@ public class ProductService {
                         VendorStatus.APPROVED
                 )
                 .stream()
+                .filter(p -> normalizedSearch == null
+                        || (p.getName() != null && p.getName().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                        || (p.getDescription() != null && p.getDescription().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                        || (p.getVendor().getShopName() != null
+                        && p.getVendor().getShopName().toLowerCase(Locale.ROOT).contains(normalizedSearch)))
                 .map(this::mapProductResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getProductsByVendor(Long vendorId, String studentEmail) {
-        AppUser student = getStudent(studentEmail);
+        AppUser student = getStudentOrStaff(studentEmail);
 
         Vendor vendor = vendorRepository.findById(vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found"));
@@ -112,11 +129,17 @@ public class ProductService {
 
         Vendor vendor = getApprovedVendor(vendorEmail);
         Product product = getOwnedActiveProduct(productId, vendor);
+        validateImageSize(request.getImageUrl());
 
         product.setName(request.getName().trim());
         product.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
         product.setPrice(request.getPrice());
         product.setStockQuantity(request.getStockQuantity());
+        if (request.getImageUrl() != null) {
+            product.setImageUrl(
+                    request.getImageUrl().isBlank() ? null : request.getImageUrl().trim()
+            );
+        }
 
         Product updatedProduct = productRepository.save(product);
         return mapProductResponse(updatedProduct);
@@ -148,6 +171,12 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    private void validateImageSize(String imageUrl) {
+        if (imageUrl != null && imageUrl.length() > MAX_IMAGE_PAYLOAD_LENGTH) {
+            throw new BadRequestException("Product image exceeds maximum allowed size (2 MB)");
+        }
+    }
+
     private Product getOwnedActiveProduct(Long productId, Vendor vendor) {
         Product product = productRepository.findByIdAndDeletedFalse(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
@@ -177,16 +206,16 @@ public class ProductService {
         return vendor;
     }
 
-    private AppUser getStudent(String studentEmail) {
+    private AppUser getStudentOrStaff(String studentEmail) {
         AppUser student = userRepository.findByEmail(studentEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Student account not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
 
-        if (student.getRole() != Role.STUDENT) {
-            throw new ForbiddenException("Only students can browse products");
+        if (student.getRole() != Role.STUDENT && student.getRole() != Role.STAFF) {
+            throw new ForbiddenException("Only students or staff can browse products");
         }
 
         if (student.getCollege() == null) {
-            throw new BadRequestException("Student is not assigned to a college");
+            throw new BadRequestException("Account is not assigned to a college");
         }
 
         return student;
@@ -198,6 +227,7 @@ public class ProductService {
         response.setName(product.getName());
         response.setDescription(product.getDescription());
         response.setPrice(product.getPrice());
+        response.setImageUrl(product.getImageUrl());
         response.setStockQuantity(product.getStockQuantity());
         response.setAvailable(product.isAvailable());
         response.setVendorId(product.getVendor().getId());

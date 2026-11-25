@@ -34,6 +34,8 @@ import java.util.Set;
 @Service
 public class VendorService {
 
+    private static final int MAX_IMAGE_PAYLOAD_LENGTH = 3_000_000;
+
     private final CollegeRepository collegeRepository;
     private final UserRepository userRepository;
     private final VendorRepository vendorRepository;
@@ -66,6 +68,8 @@ public class VendorService {
             throw new ConflictException("Email is already registered");
         }
 
+        validateImageSize(request.getQrCodeImage(), "QR code image");
+
         College college = collegeRepository
                 .findByCollegeCode(normalizedCode)
                 .filter(College::isActive)
@@ -77,6 +81,7 @@ public class VendorService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.VENDOR);
         user.setCollege(college);
+        user.setActive(true);
 
         AppUser savedUser = userRepository.save(user);
 
@@ -85,6 +90,16 @@ public class VendorService {
         vendor.setShopName(request.getShopName().trim());
         vendor.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
         vendor.setLocation(request.getLocation().trim());
+        vendor.setCustomCategory(
+                request.getCustomCategory() != null && !request.getCustomCategory().isBlank()
+                        ? request.getCustomCategory().trim()
+                        : null
+        );
+        vendor.setQrCodeImage(
+                request.getQrCodeImage() != null && !request.getQrCodeImage().isBlank()
+                        ? request.getQrCodeImage().trim()
+                        : null
+        );
         vendor.setApprovalStatus(VendorStatus.PENDING);
         vendor.setAvailable(false);
 
@@ -154,6 +169,7 @@ public class VendorService {
 
         vendor.setApprovalStatus(VendorStatus.APPROVED);
         vendor.setAvailable(true);
+        vendor.getUser().setActive(true);
 
         Vendor savedVendor = vendorRepository.save(vendor);
         return mapVendorApprovalResponse(savedVendor);
@@ -164,8 +180,8 @@ public class VendorService {
         AppUser admin = getCollegeAdmin(adminEmail);
         Vendor vendor = getVendorForAdminCollege(vendorId, admin);
 
-        if (vendor.getApprovalStatus() != VendorStatus.PENDING) {
-            throw new ConflictException("Only pending vendors can be rejected");
+        if (vendor.getApprovalStatus() == VendorStatus.REJECTED && !vendor.getUser().isActive()) {
+            throw new ConflictException("Vendor is already rejected");
         }
 
         vendor.setApprovalStatus(VendorStatus.REJECTED);
@@ -173,6 +189,18 @@ public class VendorService {
 
         Vendor savedVendor = vendorRepository.save(vendor);
         return mapVendorApprovalResponse(savedVendor);
+    }
+
+    @Transactional
+    public void deactivateVendorByAdmin(Long vendorId, String adminEmail) {
+        AppUser admin = getCollegeAdmin(adminEmail);
+        Vendor vendor = getVendorForAdminCollege(vendorId, admin);
+
+        vendor.setApprovalStatus(VendorStatus.REJECTED);
+        vendor.setAvailable(false);
+        vendor.getUser().setActive(false);
+
+        vendorRepository.save(vendor);
     }
 
     @Transactional(readOnly = true)
@@ -192,10 +220,23 @@ public class VendorService {
             throw new ForbiddenException("Only approved vendors can update shop information");
         }
 
+        validateImageSize(request.getQrCodeImage(), "QR code image");
+
         vendor.setShopName(request.getShopName().trim());
         vendor.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
         vendor.setLocation(request.getLocation().trim());
         vendor.setAvailable(request.getAvailable());
+        vendor.setCustomCategory(
+                request.getCustomCategory() != null && !request.getCustomCategory().isBlank()
+                        ? request.getCustomCategory().trim()
+                        : null
+        );
+
+        if (request.getQrCodeImage() != null) {
+            vendor.setQrCodeImage(
+                    request.getQrCodeImage().isBlank() ? null : request.getQrCodeImage().trim()
+            );
+        }
 
         Vendor savedVendor = vendorRepository.save(vendor);
 
@@ -214,21 +255,25 @@ public class VendorService {
     @Transactional(readOnly = true)
     public List<VendorSummaryResponse> getAvailableVendorsForStudent(
             String studentEmail,
-            String categoryFilter) {
+            String categoryFilter,
+            String search) {
 
         AppUser student = userRepository.findByEmail(studentEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Student account not found"));
 
-        if (student.getRole() != Role.STUDENT) {
-            throw new ForbiddenException("Only students can browse campus vendors");
+        if (student.getRole() != Role.STUDENT && student.getRole() != Role.STAFF) {
+            throw new ForbiddenException("Only students or staff can browse campus vendors");
         }
 
         if (student.getCollege() == null) {
-            throw new BadRequestException("Student is not assigned to a college");
+            throw new BadRequestException("Account is not assigned to a college");
         }
 
         String normalizedCategory = (categoryFilter != null && !categoryFilter.isBlank())
                 ? categoryFilter.trim().toUpperCase(Locale.ROOT)
+                : null;
+        String normalizedSearch = (search != null && !search.isBlank())
+                ? search.trim().toLowerCase(Locale.ROOT)
                 : null;
 
         List<Vendor> vendors = vendorRepository
@@ -241,10 +286,15 @@ public class VendorService {
                 .map(this::mapVendorSummaryResponse)
                 .filter(v -> normalizedCategory == null
                         || v.getCategories().contains(normalizedCategory))
+                .filter(v -> normalizedSearch == null
+                        || (v.getShopName() != null && v.getShopName().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                        || (v.getDescription() != null && v.getDescription().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                        || (v.getLocation() != null && v.getLocation().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                        || (v.getCustomCategory() != null && v.getCustomCategory().toLowerCase(Locale.ROOT).contains(normalizedSearch)))
                 .toList();
     }
 
-    private List<String> saveVendorCategories(Vendor vendor, List<String> categories) {
+    public List<String> saveVendorCategories(Vendor vendor, List<String> categories) {
         Set<String> selectedCategories = new HashSet<>();
         List<String> savedCategories = new ArrayList<>();
 
@@ -265,6 +315,12 @@ public class VendorService {
         }
 
         return savedCategories;
+    }
+
+    private void validateImageSize(String payload, String label) {
+        if (payload != null && payload.length() > MAX_IMAGE_PAYLOAD_LENGTH) {
+            throw new BadRequestException(label + " exceeds maximum allowed size (2 MB)");
+        }
     }
 
     private Vendor getVendorByEmail(String vendorEmail) {
@@ -323,7 +379,9 @@ public class VendorService {
         response.setLocation(vendor.getLocation());
         response.setApprovalStatus(vendor.getApprovalStatus());
         response.setAvailable(vendor.isAvailable());
+        response.setActive(vendor.getUser().isActive());
         response.setCategories(getCategoryNames(vendor.getId()));
+        response.setCustomCategory(vendor.getCustomCategory());
         response.setCollegeCode(vendor.getUser().getCollege().getCollegeCode());
         return response;
     }
@@ -337,6 +395,8 @@ public class VendorService {
         response.setApprovalStatus(vendor.getApprovalStatus());
         response.setAvailable(vendor.isAvailable());
         response.setCategories(getCategoryNames(vendor.getId()));
+        response.setCustomCategory(vendor.getCustomCategory());
+        response.setQrCodeImage(vendor.getQrCodeImage());
         response.setCollegeCode(vendor.getUser().getCollege().getCollegeCode());
         return response;
     }

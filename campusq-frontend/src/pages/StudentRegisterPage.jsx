@@ -10,6 +10,7 @@ export default function StudentRegisterPage() {
     email: '',
     password: '',
     collegeCode: '',
+    role: 'STUDENT',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -33,8 +34,8 @@ export default function StudentRegisterPage() {
     setSuccess('');
     setLoading(true);
     try {
-      await campusqApi.registerStudent(form);
-      setSuccess('Student account created! Redirecting to login...');
+      await campusqApi.registerStudentOrStaff(form);
+      setSuccess(`${form.role === 'STAFF' ? 'Staff' : 'Student'} account created! Redirecting to login...`);
       setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -44,17 +45,36 @@ export default function StudentRegisterPage() {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card">
-        <h1 style={{ margin: '0 0 4px', fontSize: '1.45rem' }}>Student Registration</h1>
-        <p className="muted" style={{ margin: '0 0 20px' }}>
-          Select your college to start pre-ordering from campus shops
+    <div className="auth-bg">
+      <div className="auth-card-glass" style={{ maxWidth: 470 }}>
+        <h1 style={{ margin: '0 0 4px', fontSize: '1.45rem' }}>Student / Staff Registration</h1>
+        <p className="muted" style={{ margin: '0 0 18px' }}>
+          Select your role and college to start pre-ordering across campus
         </p>
 
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
         <form onSubmit={handleSubmit}>
+          <div className="role-selector">
+            <button
+              type="button"
+              className={`role-option ${form.role === 'STUDENT' ? 'active' : ''}`}
+              onClick={() => setForm({ ...form, role: 'STUDENT' })}
+            >
+              <span className="role-option-title">🎓 Student</span>
+              <span className="role-option-sub">Standard campus account</span>
+            </button>
+            <button
+              type="button"
+              className={`role-option ${form.role === 'STAFF' ? 'active' : ''}`}
+              onClick={() => setForm({ ...form, role: 'STAFF' })}
+            >
+              <span className="role-option-title">🪪 Staff Member</span>
+              <span className="role-option-sub">Verified by vendor on 1st order</span>
+            </button>
+          </div>
+
           <div className="form-group">
             <label>Full Name</label>
             <input
@@ -108,11 +128,11 @@ export default function StudentRegisterPage() {
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-            {loading ? 'Creating Account...' : 'Register as Student'}
+            {loading ? 'Creating Account...' : `Register as ${form.role === 'STAFF' ? 'Staff' : 'Student'}`}
           </button>
         </form>
 
-        <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>
+        <p className="muted" style={{ textAlign: 'center', marginTop: 16 }}>
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
       </div>

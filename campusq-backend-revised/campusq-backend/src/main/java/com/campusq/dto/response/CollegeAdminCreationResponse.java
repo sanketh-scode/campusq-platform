@@ -10,6 +10,7 @@ public class CollegeAdminCreationResponse {
     private String role;
     private String collegeName;
     private String collegeCode;
+    private boolean active = true;
     private LocalDateTime createdAt;
 
     public Long getId() {
@@ -58,6 +59,14 @@ public class CollegeAdminCreationResponse {
 
     public void setCollegeCode(String collegeCode) {
         this.collegeCode = collegeCode;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 
     public LocalDateTime getCreatedAt() {

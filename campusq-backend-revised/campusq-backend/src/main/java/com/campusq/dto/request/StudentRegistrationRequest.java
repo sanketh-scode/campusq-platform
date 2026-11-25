@@ -16,8 +16,12 @@ public class StudentRegistrationRequest {
     @NotBlank(message = "Password is required")
     @Size(min = 8, message = "Password must contain at least 8 characters")
     private String password;
+
     @NotBlank(message = "College code is required")
     private String collegeCode;
+
+    // Optional: STUDENT (default) or STAFF
+    private String role;
 
     public StudentRegistrationRequest() {
     }
@@ -45,11 +49,20 @@ public class StudentRegistrationRequest {
     public void setPassword(String password) {
         this.password = password;
     }
+
     public String getCollegeCode() {
-    return collegeCode;
-}
+        return collegeCode;
+    }
 
     public void setCollegeCode(String collegeCode) {
         this.collegeCode = collegeCode;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

@@ -37,7 +37,6 @@ build/
 .env.*
 !.env.example
 
-### Application credentials ###
 
 ### Logs ###
 *.log

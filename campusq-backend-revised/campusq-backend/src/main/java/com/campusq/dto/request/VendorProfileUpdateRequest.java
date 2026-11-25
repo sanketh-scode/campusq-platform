@@ -24,6 +24,11 @@ public class VendorProfileUpdateRequest {
 
     private List<@NotBlank(message = "Category name cannot be blank") String> categories;
 
+    @Size(max = 100, message = "Custom category cannot exceed 100 characters")
+    private String customCategory;
+
+    private String qrCodeImage;
+
     public VendorProfileUpdateRequest() {
     }
 
@@ -65,5 +70,21 @@ public class VendorProfileUpdateRequest {
 
     public void setCategories(List<String> categories) {
         this.categories = categories;
+    }
+
+    public String getCustomCategory() {
+        return customCategory;
+    }
+
+    public void setCustomCategory(String customCategory) {
+        this.customCategory = customCategory;
+    }
+
+    public String getQrCodeImage() {
+        return qrCodeImage;
+    }
+
+    public void setQrCodeImage(String qrCodeImage) {
+        this.qrCodeImage = qrCodeImage;
     }
 }

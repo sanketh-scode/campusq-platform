@@ -12,6 +12,7 @@ export function getHomePathForRole(role) {
     case 'VENDOR':
       return '/vendor';
     case 'STUDENT':
+    case 'STAFF':
       return '/student';
     default:
       return '/login';
@@ -28,19 +29,39 @@ export function AuthProvider({ children }) {
     }
   });
 
-  const login = async (email, password) => {
-    const data = await campusqApi.login({ email, password });
+  const persistSession = (data) => {
     const sessionUser = {
       userId: data.userId,
       fullName: data.fullName,
       email: data.email,
       role: data.role,
       collegeCode: data.collegeCode || null,
+      collegeName: data.collegeName || null,
+      staffVerified: !!data.staffVerified,
+      staffStatusNotice: data.staffStatusNotice || null,
     };
     localStorage.setItem('campusq_token', data.token);
     localStorage.setItem('campusq_user', JSON.stringify(sessionUser));
     setUser(sessionUser);
     return sessionUser;
+  };
+
+  const login = async (email, password) => {
+    const data = await campusqApi.login({ email, password });
+    return persistSession(data);
+  };
+
+  const loginWithGoogle = async (idToken) => {
+    const data = await campusqApi.googleLogin(idToken);
+    if (data.needsRegistration) {
+      return data;
+    }
+    return { ...persistSession(data), needsRegistration: false };
+  };
+
+  const completeGoogleRegistration = async (payload) => {
+    const data = await campusqApi.completeGoogleRegistration(payload);
+    return persistSession(data);
   };
 
   const logout = () => {
@@ -50,7 +71,9 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, login, loginWithGoogle, completeGoogleRegistration, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

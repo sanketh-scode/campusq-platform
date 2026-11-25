@@ -12,6 +12,8 @@ public class VendorSummaryResponse {
     private VendorStatus approvalStatus;
     private boolean available;
     private List<String> categories;
+    private String customCategory;
+    private String qrCodeImage;
     private String collegeCode;
 
     public VendorSummaryResponse() {
@@ -71,6 +73,22 @@ public class VendorSummaryResponse {
 
     public void setCategories(List<String> categories) {
         this.categories = categories;
+    }
+
+    public String getCustomCategory() {
+        return customCategory;
+    }
+
+    public void setCustomCategory(String customCategory) {
+        this.customCategory = customCategory;
+    }
+
+    public String getQrCodeImage() {
+        return qrCodeImage;
+    }
+
+    public void setQrCodeImage(String qrCodeImage) {
+        this.qrCodeImage = qrCodeImage;
     }
 
     public String getCollegeCode() {

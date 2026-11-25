@@ -9,6 +9,10 @@ public class LoginResponse {
     private String email;
     private String role;
     private String collegeCode;
+    private String collegeName;
+    private boolean staffVerified;
+    private String staffStatusNotice;
+    private boolean needsRegistration;
 
     public String getToken() {
         return token;
@@ -64,5 +68,37 @@ public class LoginResponse {
 
     public void setCollegeCode(String collegeCode) {
         this.collegeCode = collegeCode;
+    }
+
+    public String getCollegeName() {
+        return collegeName;
+    }
+
+    public void setCollegeName(String collegeName) {
+        this.collegeName = collegeName;
+    }
+
+    public boolean isStaffVerified() {
+        return staffVerified;
+    }
+
+    public void setStaffVerified(boolean staffVerified) {
+        this.staffVerified = staffVerified;
+    }
+
+    public String getStaffStatusNotice() {
+        return staffStatusNotice;
+    }
+
+    public void setStaffStatusNotice(String staffStatusNotice) {
+        this.staffStatusNotice = staffStatusNotice;
+    }
+
+    public boolean isNeedsRegistration() {
+        return needsRegistration;
+    }
+
+    public void setNeedsRegistration(boolean needsRegistration) {
+        this.needsRegistration = needsRegistration;
     }
 }

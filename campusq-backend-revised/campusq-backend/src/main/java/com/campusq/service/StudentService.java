@@ -46,22 +46,34 @@ public class StudentService {
                 .filter(College::isActive)
                 .orElseThrow(() -> new BadRequestException("Invalid or inactive college code"));
 
-        AppUser student = new AppUser();
-        student.setFullName(request.getFullName().trim());
-        student.setEmail(normalizedEmail);
-        student.setPassword(passwordEncoder.encode(request.getPassword()));
-        student.setRole(Role.STUDENT);
-        student.setCollege(college);
+        Role targetRole = Role.STUDENT;
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            String requestedRole = request.getRole().trim().toUpperCase(Locale.ROOT);
+            if ("STAFF".equals(requestedRole)) {
+                targetRole = Role.STAFF;
+            } else if (!"STUDENT".equals(requestedRole)) {
+                throw new BadRequestException("Registration role must be STUDENT or STAFF");
+            }
+        }
 
-        AppUser savedStudent = userRepository.save(student);
+        AppUser user = new AppUser();
+        user.setFullName(request.getFullName().trim());
+        user.setEmail(normalizedEmail);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(targetRole);
+        user.setCollege(college);
+        user.setStaffVerified(false);
+        user.setActive(true);
+
+        AppUser savedUser = userRepository.save(user);
 
         StudentRegistrationResponse response = new StudentRegistrationResponse();
-        response.setId(savedStudent.getId());
-        response.setFullName(savedStudent.getFullName());
-        response.setEmail(savedStudent.getEmail());
-        response.setRole(savedStudent.getRole());
-        response.setCreatedAt(savedStudent.getCreatedAt());
-        response.setCollegeCode(savedStudent.getCollege().getCollegeCode());
+        response.setId(savedUser.getId());
+        response.setFullName(savedUser.getFullName());
+        response.setEmail(savedUser.getEmail());
+        response.setRole(savedUser.getRole());
+        response.setCreatedAt(savedUser.getCreatedAt());
+        response.setCollegeCode(savedUser.getCollege().getCollegeCode());
 
         return response;
     }

@@ -88,7 +88,6 @@ public class SecurityConfig {
 
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            // Stateless JWT Bearer token API (no session cookies), so CSRF protection is disabled
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -120,6 +119,8 @@ public class SecurityConfig {
                 .requestMatchers(
                         HttpMethod.POST,
                         "/api/auth/login",
+                        "/api/auth/google",
+                        "/api/auth/google/complete",
                         "/api/students/register",
                         "/api/vendors/register"
                 ).permitAll()
@@ -133,16 +134,20 @@ public class SecurityConfig {
                 // Vendor self-management & product endpoints
                 .requestMatchers("/api/vendor/**").hasRole("VENDOR")
 
-                // Student vendor & product browsing
-                .requestMatchers(HttpMethod.GET, "/api/vendors").hasRole("STUDENT")
-                .requestMatchers("/api/products/**").hasRole("STUDENT")
+                // Student & Staff browsing and complaints
+                .requestMatchers(HttpMethod.GET, "/api/vendors").hasAnyRole("STUDENT", "STAFF")
+                .requestMatchers("/api/products/**").hasAnyRole("STUDENT", "STAFF")
+                .requestMatchers("/api/complaints/**").hasAnyRole("STUDENT", "STAFF")
 
                 // Vendor order endpoints (must precede /api/orders/**)
                 .requestMatchers("/api/orders/vendor/**").hasRole("VENDOR")
                 .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasRole("VENDOR")
 
-                // Student order endpoints
-                .requestMatchers("/api/orders/**").hasRole("STUDENT")
+                // Student & Staff order endpoints
+                .requestMatchers("/api/orders/**").hasAnyRole("STUDENT", "STAFF")
+
+                // Authenticated in-app notifications
+                .requestMatchers("/api/notifications/**").authenticated()
 
                 .anyRequest().authenticated()
             )

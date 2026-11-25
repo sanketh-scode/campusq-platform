@@ -1,7 +1,9 @@
 package com.campusq.controller;
 
+import com.campusq.dto.request.OrderPaymentRequest;
 import com.campusq.dto.request.OrderRequest;
 import com.campusq.dto.request.OrderStatusUpdateRequest;
+import com.campusq.dto.request.StaffVerificationRequest;
 import com.campusq.dto.response.OrderResponse;
 import com.campusq.service.OrderService;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -51,6 +54,34 @@ public class OrderController {
         );
     }
 
+    @PutMapping("/{orderId}/pay")
+    public ResponseEntity<OrderResponse> submitPayment(
+            @PathVariable Long orderId,
+            @Valid @RequestBody OrderPaymentRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                orderService.submitPayment(orderId, authentication.getName(), request)
+        );
+    }
+
+    @PutMapping("/{orderId}/complete")
+    public ResponseEntity<OrderResponse> completeOrderByStudent(
+            @PathVariable Long orderId,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                orderService.completeOrderByStudent(orderId, authentication.getName())
+        );
+    }
+
+    @PutMapping("/{orderId}/cancel")
+    public ResponseEntity<OrderResponse> cancelOrder(
+            @PathVariable Long orderId,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                orderService.cancelOrder(orderId, authentication.getName())
+        );
+    }
+
     @GetMapping("/vendor/orders")
     public ResponseEntity<List<OrderResponse>> getVendorOrders(Authentication authentication) {
         return ResponseEntity.ok(orderService.getVendorOrders(authentication.getName()));
@@ -70,12 +101,17 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/{orderId}/cancel")
-    public ResponseEntity<OrderResponse> cancelOrder(
-            @PathVariable Long orderId,
+    @PutMapping("/vendor/verify-staff/{studentId}")
+    public ResponseEntity<Map<String, String>> verifyStaffMember(
+            @PathVariable Long studentId,
+            @Valid @RequestBody StaffVerificationRequest request,
             Authentication authentication) {
 
-        OrderResponse response = orderService.cancelOrder(orderId, authentication.getName());
-        return ResponseEntity.ok(response);
+        String message = orderService.verifyStaffMember(
+                studentId,
+                authentication.getName(),
+                request.getIsStaff()
+        );
+        return ResponseEntity.ok(Map.of("message", message));
     }
 }

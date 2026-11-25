@@ -13,7 +13,9 @@ public class VendorApprovalResponse {
     private String location;
     private VendorStatus approvalStatus;
     private boolean available;
+    private boolean active;
     private List<String> categories;
+    private String customCategory;
     private String collegeCode;
 
     public Long getVendorId() {
@@ -80,12 +82,28 @@ public class VendorApprovalResponse {
         this.available = available;
     }
 
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     public List<String> getCategories() {
         return categories;
     }
 
     public void setCategories(List<String> categories) {
         this.categories = categories;
+    }
+
+    public String getCustomCategory() {
+        return customCategory;
+    }
+
+    public void setCustomCategory(String customCategory) {
+        this.customCategory = customCategory;
     }
 
     public String getCollegeCode() {

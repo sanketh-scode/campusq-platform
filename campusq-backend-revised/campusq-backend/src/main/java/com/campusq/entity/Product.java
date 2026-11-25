@@ -30,6 +30,9 @@ public class Product {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String imageUrl;
+
     @Column(nullable = false)
     private boolean deleted = false;
 
@@ -91,6 +94,14 @@ public class Product {
 
     public void setPrice(BigDecimal price) {
         this.price = price;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 
     public Integer getStockQuantity() {

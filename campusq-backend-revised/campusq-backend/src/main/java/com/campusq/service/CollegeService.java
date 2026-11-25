@@ -1,10 +1,12 @@
 package com.campusq.service;
 
 import com.campusq.dto.request.CollegeCreateRequest;
+import com.campusq.dto.request.CollegeUpdateRequest;
 import com.campusq.dto.response.CollegeResponse;
 import com.campusq.dto.response.PublicCollegeResponse;
 import com.campusq.entity.College;
 import com.campusq.exception.ConflictException;
+import com.campusq.exception.ResourceNotFoundException;
 import com.campusq.repository.CollegeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,25 @@ public class CollegeService {
 
         College saved = collegeRepository.save(college);
         return mapCollegeResponse(saved);
+    }
+
+    @Transactional
+    public CollegeResponse updateCollege(Long collegeId, CollegeUpdateRequest request) {
+        College college = collegeRepository.findById(collegeId)
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
+
+        String normalizedCode = request.getCollegeCode().trim().toUpperCase(Locale.ROOT);
+        if (!college.getCollegeCode().equals(normalizedCode)
+                && collegeRepository.existsByCollegeCode(normalizedCode)) {
+            throw new ConflictException("College code already exists: " + normalizedCode);
+        }
+
+        college.setCollegeName(request.getCollegeName().trim());
+        college.setCollegeCode(normalizedCode);
+        college.setAddress(request.getAddress().trim());
+        college.setActive(request.getActive());
+
+        return mapCollegeResponse(collegeRepository.save(college));
     }
 
     @Transactional(readOnly = true)

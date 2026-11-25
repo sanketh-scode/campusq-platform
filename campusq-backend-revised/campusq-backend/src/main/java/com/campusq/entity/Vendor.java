@@ -34,6 +34,12 @@ public class Vendor {
     @Column(nullable = false)
     private String location;
 
+    @Column(length = 100)
+    private String customCategory;
+
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String qrCodeImage;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", nullable = false)
     private VendorStatus approvalStatus = VendorStatus.PENDING;
@@ -94,6 +100,22 @@ public class Vendor {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getCustomCategory() {
+        return customCategory;
+    }
+
+    public void setCustomCategory(String customCategory) {
+        this.customCategory = customCategory;
+    }
+
+    public String getQrCodeImage() {
+        return qrCodeImage;
+    }
+
+    public void setQrCodeImage(String qrCodeImage) {
+        this.qrCodeImage = qrCodeImage;
     }
 
     public VendorStatus getApprovalStatus() {

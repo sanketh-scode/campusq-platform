@@ -1,12 +1,14 @@
-
 package com.campusq.controller;
 
 import com.campusq.dto.response.ProductResponse;
 import com.campusq.service.ProductService;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -20,29 +22,21 @@ public class StudentProductController {
         this.productService = productService;
     }
 
-    // Browse all available products in student's college
     @GetMapping
     public ResponseEntity<List<ProductResponse>> getProducts(
+            @RequestParam(required = false) String search,
             Authentication authentication) {
-
         return ResponseEntity.ok(
-                productService.getProductsForStudent(
-                        authentication.getName()
-                )
+                productService.getProductsForStudent(authentication.getName(), search)
         );
     }
 
-    // Browse products from a particular vendor
     @GetMapping("/vendor/{vendorId}")
     public ResponseEntity<List<ProductResponse>> getProductsByVendor(
             @PathVariable Long vendorId,
             Authentication authentication) {
-
         return ResponseEntity.ok(
-                productService.getProductsByVendor(
-                        vendorId,
-                        authentication.getName()
-                )
+                productService.getProductsByVendor(vendorId, authentication.getName())
         );
     }
 }

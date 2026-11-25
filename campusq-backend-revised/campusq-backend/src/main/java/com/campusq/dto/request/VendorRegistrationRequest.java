@@ -9,7 +9,6 @@ import java.util.List;
 
 public class VendorRegistrationRequest {
 
-    // Vendor account details
     @NotBlank(message = "Full name is required")
     private String fullName;
 
@@ -21,7 +20,6 @@ public class VendorRegistrationRequest {
     @Size(min = 8, message = "Password must contain at least 8 characters")
     private String password;
 
-    // Shop details
     @NotBlank(message = "Shop name is required")
     private String shopName;
 
@@ -30,9 +28,14 @@ public class VendorRegistrationRequest {
     @NotBlank(message = "Shop location is required")
     private String location;
 
-    // Multiple shop categories
     @NotEmpty(message = "Select at least one category")
     private List<@NotBlank String> categories;
+
+    @Size(max = 100, message = "Custom category cannot exceed 100 characters")
+    private String customCategory;
+
+    private String qrCodeImage;
+
     @NotBlank(message = "College code is required")
     private String collegeCode;
 
@@ -94,9 +97,26 @@ public class VendorRegistrationRequest {
     public void setCategories(List<String> categories) {
         this.categories = categories;
     }
+
+    public String getCustomCategory() {
+        return customCategory;
+    }
+
+    public void setCustomCategory(String customCategory) {
+        this.customCategory = customCategory;
+    }
+
+    public String getQrCodeImage() {
+        return qrCodeImage;
+    }
+
+    public void setQrCodeImage(String qrCodeImage) {
+        this.qrCodeImage = qrCodeImage;
+    }
+
     public String getCollegeCode() {
-    return collegeCode;
-}
+        return collegeCode;
+    }
 
     public void setCollegeCode(String collegeCode) {
         this.collegeCode = collegeCode;

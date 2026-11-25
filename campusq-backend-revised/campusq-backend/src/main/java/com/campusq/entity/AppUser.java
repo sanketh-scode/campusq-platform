@@ -34,6 +34,15 @@ public class AppUser {
     @JoinColumn(name = "college_id")
     private College college;
 
+    @Column(nullable = false)
+    private boolean staffVerified = false;
+
+    @Column(length = 500)
+    private String staffStatusNotice;
+
+    @Column(nullable = false)
+    private boolean active = true;
+
     private LocalDateTime createdAt;
 
     @PrePersist
@@ -90,5 +99,29 @@ public class AppUser {
 
     public void setCollege(College college) {
         this.college = college;
+    }
+
+    public boolean isStaffVerified() {
+        return staffVerified;
+    }
+
+    public void setStaffVerified(boolean staffVerified) {
+        this.staffVerified = staffVerified;
+    }
+
+    public String getStaffStatusNotice() {
+        return staffStatusNotice;
+    }
+
+    public void setStaffStatusNotice(String staffStatusNotice) {
+        this.staffStatusNotice = staffStatusNotice;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 }

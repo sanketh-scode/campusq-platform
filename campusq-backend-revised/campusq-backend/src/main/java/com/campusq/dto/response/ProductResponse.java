@@ -9,6 +9,7 @@ public class ProductResponse {
     private String name;
     private String description;
     private BigDecimal price;
+    private String imageUrl;
     private Integer stockQuantity;
     private boolean available;
     private Long vendorId;
@@ -46,6 +47,14 @@ public class ProductResponse {
 
     public void setPrice(BigDecimal price) {
         this.price = price;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 
     public Integer getStockQuantity() {

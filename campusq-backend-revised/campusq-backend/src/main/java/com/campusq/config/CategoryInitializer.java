@@ -18,7 +18,7 @@ public class CategoryInitializer {
     @Bean
     CommandLineRunner initializeCategories(VendorCategoryRepository categoryRepository) {
         return args -> {
-            List<String> categories = List.of("CANTEEN", "XEROX", "STATIONERY");
+            List<String> categories = List.of("CANTEEN", "XEROX", "STATIONERY", "OTHER");
 
             for (String categoryName : categories) {
                 if (!categoryRepository.existsByName(categoryName)) {

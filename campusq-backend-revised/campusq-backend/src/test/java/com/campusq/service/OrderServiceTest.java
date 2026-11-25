@@ -56,6 +56,8 @@ class OrderServiceTest {
     private TokenSequenceRepository tokenSequenceRepository;
     @Mock
     private VendorRepository vendorRepository;
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private OrderService orderService;

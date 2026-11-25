@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { campusqApi } from '../api/apiClient';
+import { fileToBase64DataUrl } from '../data/sampleCatalog';
 
-const ALL_CATEGORIES = ['CANTEEN', 'XEROX', 'STATIONERY'];
+const ALL_CATEGORIES = ['CANTEEN', 'XEROX', 'STATIONERY', 'OTHER'];
 
 export default function VendorRegisterPage() {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export default function VendorRegisterPage() {
     location: '',
     collegeCode: '',
     categories: ['CANTEEN'],
+    customCategory: '',
+    qrCodeImage: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -43,6 +46,18 @@ export default function VendorRegisterPage() {
     });
   };
 
+  const handleQrUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      const dataUrl = await fileToBase64DataUrl(file);
+      setForm((prev) => ({ ...prev, qrCodeImage: dataUrl }));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -66,11 +81,11 @@ export default function VendorRegisterPage() {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card" style={{ maxWidth: 520 }}>
+    <div className="auth-bg">
+      <div className="auth-card-glass" style={{ maxWidth: 560 }}>
         <h1 style={{ margin: '0 0 4px', fontSize: '1.45rem' }}>Vendor Registration</h1>
-        <p className="muted" style={{ margin: '0 0 20px' }}>
-          Register your campus shop. Your College Admin will review and approve your request.
+        <p className="muted" style={{ margin: '0 0 18px' }}>
+          Register your campus shop &amp; upload your UPI QR scanner so students can pay online.
         </p>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -183,12 +198,38 @@ export default function VendorRegisterPage() {
             </div>
           </div>
 
+          {form.categories.includes('OTHER') && (
+            <div className="form-group">
+              <label>Specify Other Shop Type (e.g. Coffee Shop, Juice Bar, Book Store)</label>
+              <input
+                className="input"
+                placeholder="Coffee Shop"
+                value={form.customCategory}
+                onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+              />
+            </div>
+          )}
+
+          <div className="form-group">
+            <label>UPI Payment QR Scanner Image (Optional, max 2 MB)</label>
+            <input type="file" accept="image/*" className="input" onChange={handleQrUpload} />
+            {form.qrCodeImage && (
+              <div style={{ marginTop: 8 }}>
+                <img
+                  src={form.qrCodeImage}
+                  alt="UPI QR Preview"
+                  style={{ width: 110, height: 110, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 8 }}
+                />
+              </div>
+            )}
+          </div>
+
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
             {loading ? 'Submitting...' : 'Submit Vendor Registration'}
           </button>
         </form>
 
-        <p className="muted" style={{ textAlign: 'center', marginTop: 18 }}>
+        <p className="muted" style={{ textAlign: 'center', marginTop: 16 }}>
           Already registered? <Link to="/login">Sign in</Link>
         </p>
       </div>
