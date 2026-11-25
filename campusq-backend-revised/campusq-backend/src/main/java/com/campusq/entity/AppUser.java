@@ -27,7 +27,7 @@ public class AppUser {
     private String password;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30, columnDefinition = "VARCHAR(30)")
     private Role role;
 
     @ManyToOne(fetch = FetchType.LAZY)

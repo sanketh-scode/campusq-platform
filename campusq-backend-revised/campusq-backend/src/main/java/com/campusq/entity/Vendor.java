@@ -39,6 +39,8 @@ public class Vendor {
 
     @Column(columnDefinition = "MEDIUMTEXT")
     private String qrCodeImage;
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String shopImage;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", nullable = false)
@@ -116,6 +118,14 @@ public class Vendor {
 
     public void setQrCodeImage(String qrCodeImage) {
         this.qrCodeImage = qrCodeImage;
+    }
+
+    public String getShopImage() {
+        return shopImage;
+    }
+
+    public void setShopImage(String shopImage) {
+        this.shopImage = shopImage;
     }
 
     public VendorStatus getApprovalStatus() {

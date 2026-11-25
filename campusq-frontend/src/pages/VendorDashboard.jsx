@@ -40,6 +40,7 @@ export default function VendorDashboard() {
     categories: [],
     customCategory: '',
     qrCodeImage: '',
+    shopImage: '',
   });
 
   const loadAll = async () => {
@@ -59,6 +60,7 @@ export default function VendorDashboard() {
         categories: prof.categories || [],
         customCategory: prof.customCategory || '',
         qrCodeImage: prof.qrCodeImage || '',
+        shopImage: prof.shopImage || '',
       });
 
       if (prof.approvalStatus === 'APPROVED') {
@@ -127,6 +129,18 @@ export default function VendorDashboard() {
     try {
       const dataUrl = await fileToBase64DataUrl(file);
       setProductForm((prev) => ({ ...prev, imageUrl: dataUrl }));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleShopImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      const dataUrl = await fileToBase64DataUrl(file);
+      setProfileForm((prev) => ({ ...prev, shopImage: dataUrl }));
     } catch (err) {
       setError(err.message);
     }
@@ -786,6 +800,27 @@ export default function VendorDashboard() {
                       />
                     </div>
                   )}
+                  <div className="form-group">
+                    <label>
+                      Shop Cover Image {profileForm.categories.includes('OTHER') ? '(Recommended for Other Category, max 2 MB)' : '(Optional, max 2 MB)'}
+                    </label>
+                    <input type="file" accept="image/*" className="input" onChange={handleShopImageUpload} />
+                    {profileForm.shopImage && (
+                      <div style={{ marginTop: 8 }}>
+                        <img
+                          src={profileForm.shopImage}
+                          alt="Shop Cover"
+                          style={{
+                            width: '100%',
+                            maxHeight: 140,
+                            objectFit: 'cover',
+                            border: '1px solid var(--border)',
+                            borderRadius: 10,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
                   <div className="form-group">
                     <label>Shop UPI Payment QR Scanner (max 2 MB)</label>
                     <input type="file" accept="image/*" className="input" onChange={handleQrUpload} />

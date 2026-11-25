@@ -53,14 +53,15 @@ public class CustomerOrder {
     private BigDecimal totalAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30, columnDefinition = "VARCHAR(30)")
     private OrderStatus status = OrderStatus.PENDING;
 
     @Enumerated(EnumType.STRING)
+    @Column(length = 30, columnDefinition = "VARCHAR(30)")
     private PaymentMethod paymentMethod;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30, columnDefinition = "VARCHAR(30)")
     private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
 
     @Column(length = 120)

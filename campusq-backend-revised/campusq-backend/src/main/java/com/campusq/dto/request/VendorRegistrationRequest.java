@@ -35,6 +35,7 @@ public class VendorRegistrationRequest {
     private String customCategory;
 
     private String qrCodeImage;
+    private String shopImage;
 
     @NotBlank(message = "College code is required")
     private String collegeCode;
@@ -112,6 +113,14 @@ public class VendorRegistrationRequest {
 
     public void setQrCodeImage(String qrCodeImage) {
         this.qrCodeImage = qrCodeImage;
+    }
+
+    public String getShopImage() {
+        return shopImage;
+    }
+
+    public void setShopImage(String shopImage) {
+        this.shopImage = shopImage;
     }
 
     public String getCollegeCode() {

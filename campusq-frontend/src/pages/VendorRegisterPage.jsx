@@ -19,6 +19,7 @@ export default function VendorRegisterPage() {
     categories: ['CANTEEN'],
     customCategory: '',
     qrCodeImage: '',
+    shopImage: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -44,6 +45,18 @@ export default function VendorRegisterPage() {
         : [...prev.categories, cat];
       return { ...prev, categories: next };
     });
+  };
+
+  const handleShopImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      const dataUrl = await fileToBase64DataUrl(file);
+      setForm((prev) => ({ ...prev, shopImage: dataUrl }));
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleQrUpload = async (e) => {
@@ -209,6 +222,20 @@ export default function VendorRegisterPage() {
               />
             </div>
           )}
+
+          <div className="form-group">
+            <label>
+              Shop Cover Image {form.categories.includes('OTHER') ? '(Recommended for Other Category, max 2 MB)' : '(Optional — defaults to category photo, max 2 MB)'}
+            </label>
+            <input type="file" accept="image/*" className="input" onChange={handleShopImageUpload} />
+            {form.shopImage && (
+              <img
+                src={form.shopImage}
+                alt="Shop Cover Preview"
+                style={{ width: '100%', maxHeight: 130, objectFit: 'cover', borderRadius: 10, marginTop: 8 }}
+              />
+            )}
+          </div>
 
           <div className="form-group">
             <label>UPI Payment QR Scanner Image (Optional, max 2 MB)</label>

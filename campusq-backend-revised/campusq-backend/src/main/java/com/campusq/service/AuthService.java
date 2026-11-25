@@ -159,6 +159,11 @@ public class AuthService {
                             ? request.getQrCodeImage().trim()
                             : null
             );
+            vendor.setShopImage(
+                    request.getShopImage() != null && !request.getShopImage().isBlank()
+                            ? request.getShopImage().trim()
+                            : null
+            );
             vendor.setApprovalStatus(VendorStatus.PENDING);
             vendor.setAvailable(false);
 

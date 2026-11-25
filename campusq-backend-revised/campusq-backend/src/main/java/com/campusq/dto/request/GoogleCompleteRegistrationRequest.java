@@ -23,6 +23,7 @@ public class GoogleCompleteRegistrationRequest {
     private List<String> categories;
     private String customCategory;
     private String qrCodeImage;
+    private String shopImage;
 
     public String getIdToken() {
         return idToken;
@@ -94,5 +95,13 @@ public class GoogleCompleteRegistrationRequest {
 
     public void setQrCodeImage(String qrCodeImage) {
         this.qrCodeImage = qrCodeImage;
+    }
+
+    public String getShopImage() {
+        return shopImage;
+    }
+
+    public void setShopImage(String shopImage) {
+        this.shopImage = shopImage;
     }
 }

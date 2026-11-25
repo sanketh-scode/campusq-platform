@@ -28,6 +28,7 @@ public class VendorProfileUpdateRequest {
     private String customCategory;
 
     private String qrCodeImage;
+    private String shopImage;
 
     public VendorProfileUpdateRequest() {
     }
@@ -86,5 +87,13 @@ public class VendorProfileUpdateRequest {
 
     public void setQrCodeImage(String qrCodeImage) {
         this.qrCodeImage = qrCodeImage;
+    }
+
+    public String getShopImage() {
+        return shopImage;
+    }
+
+    public void setShopImage(String shopImage) {
+        this.shopImage = shopImage;
     }
 }

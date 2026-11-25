@@ -69,6 +69,7 @@ public class VendorService {
         }
 
         validateImageSize(request.getQrCodeImage(), "QR code image");
+        validateImageSize(request.getShopImage(), "Shop cover image");
 
         College college = collegeRepository
                 .findByCollegeCode(normalizedCode)
@@ -98,6 +99,11 @@ public class VendorService {
         vendor.setQrCodeImage(
                 request.getQrCodeImage() != null && !request.getQrCodeImage().isBlank()
                         ? request.getQrCodeImage().trim()
+                        : null
+        );
+        vendor.setShopImage(
+                request.getShopImage() != null && !request.getShopImage().isBlank()
+                        ? request.getShopImage().trim()
                         : null
         );
         vendor.setApprovalStatus(VendorStatus.PENDING);
@@ -221,6 +227,7 @@ public class VendorService {
         }
 
         validateImageSize(request.getQrCodeImage(), "QR code image");
+        validateImageSize(request.getShopImage(), "Shop cover image");
 
         vendor.setShopName(request.getShopName().trim());
         vendor.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
@@ -235,6 +242,11 @@ public class VendorService {
         if (request.getQrCodeImage() != null) {
             vendor.setQrCodeImage(
                     request.getQrCodeImage().isBlank() ? null : request.getQrCodeImage().trim()
+            );
+        }
+        if (request.getShopImage() != null) {
+            vendor.setShopImage(
+                    request.getShopImage().isBlank() ? null : request.getShopImage().trim()
             );
         }
 
@@ -397,6 +409,7 @@ public class VendorService {
         response.setCategories(getCategoryNames(vendor.getId()));
         response.setCustomCategory(vendor.getCustomCategory());
         response.setQrCodeImage(vendor.getQrCodeImage());
+        response.setShopImage(vendor.getShopImage());
         response.setCollegeCode(vendor.getUser().getCollege().getCollegeCode());
         return response;
     }

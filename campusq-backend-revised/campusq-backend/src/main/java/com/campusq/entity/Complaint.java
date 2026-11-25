@@ -39,7 +39,7 @@ public class Complaint {
     private String message;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30, columnDefinition = "VARCHAR(30)")
     private ComplaintStatus status = ComplaintStatus.OPEN;
 
     @Column(length = 1000)

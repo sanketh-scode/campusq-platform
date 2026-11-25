@@ -8,6 +8,22 @@ import { fileToBase64DataUrl } from '../data/sampleCatalog';
 const CATEGORIES = ['ALL', 'CANTEEN', 'XEROX', 'STATIONERY', 'OTHER'];
 const ORDER_STEPS = ['PENDING', 'AWAITING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
 
+const CATEGORY_COVERS = {
+  CANTEEN: '/cat-canteen.jpg',
+  XEROX: '/cat-xerox.jpg',
+  STATIONERY: '/cat-stationery.jpg',
+};
+
+function getVendorCoverImage(vendor) {
+  if (vendor.shopImage) return vendor.shopImage;
+  const cats = vendor.categories || [];
+  for (const c of ['CANTEEN', 'XEROX', 'STATIONERY']) {
+    if (cats.includes(c)) return CATEGORY_COVERS[c];
+  }
+  return null;
+}
+
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState('BROWSE');
@@ -462,45 +478,69 @@ export default function StudentDashboard() {
                   <div className="grid-3" style={{ marginBottom: 24 }}>
                     {vendors.map((v) => {
                       const active = selectedVendor?.vendorId === v.vendorId;
+                      const cover = getVendorCoverImage(v);
                       return (
                         <div
                           key={v.vendorId}
-                          className="card"
-                          style={{
-                            cursor: 'pointer',
-                            borderColor: active ? 'var(--primary)' : 'var(--border)',
-                            boxShadow: active ? '0 0 0 2px rgba(15, 118, 110, 0.2)' : undefined,
-                          }}
+                          className={`vendor-card ${active ? 'selected' : ''}`}
                           onClick={() => handleSelectVendor(v)}
                         >
-                          <div className="row-between" style={{ marginBottom: 6 }}>
-                            <h3 style={{ margin: 0, fontSize: '1.05rem' }}>{v.shopName}</h3>
-                            <span className="badge badge-success">OPEN</span>
-                          </div>
-                          <p className="muted" style={{ margin: '0 0 8px' }}>
-                            {v.description || 'Campus shop'}
-                          </p>
-                          <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 10 }}>
-                            📍 {v.location}
-                          </div>
-                          <div className="row-between">
-                            <div className="row-gap">
-                              {(v.categories || []).map((c) => (
-                                <span key={c} className="badge badge-primary">
-                                  {c === 'OTHER' && v.customCategory ? v.customCategory : c}
-                                </span>
-                              ))}
+                          <div className="vendor-cover-wrap">
+                            {cover ? (
+                              <img src={cover} alt={v.shopName} className="vendor-cover-img" />
+                            ) : (
+                              <div
+                                style={{
+                                  height: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '2.5rem',
+                                  color: '#fff',
+                                }}
+                              >
+                                🏪
+                              </div>
+                            )}
+                            <div className="vendor-cover-overlay">
+                              <span className="badge badge-success" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                                ● OPEN
+                              </span>
                             </div>
-                            <button
-                              type="button"
-                              className="admin-subtle-link"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setComplaintVendor(v);
-                              }}
-                            >
-                              Report issue
-                            </button>
+                          </div>
+
+                          <div className="vendor-card-body">
+                            <div>
+                              <h3 style={{ margin: '0 0 5px', fontSize: '1.08rem' }}>{v.shopName}</h3>
+                              <p className="vendor-desc-clamp">
+                                {v.description || 'Campus shop'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <div className="muted" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
+                                📍 {v.location}
+                              </div>
+                              <div className="row-between">
+                                <div className="row-gap">
+                                  {(v.categories || []).map((c) => (
+                                    <span key={c} className="badge badge-primary">
+                                      {c === 'OTHER' && v.customCategory ? v.customCategory : c}
+                                    </span>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="admin-subtle-link"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setComplaintVendor(v);
+                                  }}
+                                >
+                                  Report issue
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
