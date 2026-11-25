@@ -16,7 +16,7 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
     headers['Content-Type'] = 'application/json';
   }
   if (auth) {
-    const token = localStorage.getItem('campusq_token');
+    const token = sessionStorage.getItem('campusq_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -48,8 +48,8 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
 
   if (!response.ok) {
     if (response.status === 401 && auth) {
-      localStorage.removeItem('campusq_token');
-      localStorage.removeItem('campusq_user');
+      sessionStorage.removeItem('campusq_token');
+      sessionStorage.removeItem('campusq_user');
     }
     const message =
       data?.message ||

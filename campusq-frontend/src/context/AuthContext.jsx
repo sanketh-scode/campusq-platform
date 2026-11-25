@@ -22,7 +22,7 @@ export function getHomePathForRole(role) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('campusq_user');
+      const saved = sessionStorage.getItem('campusq_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -40,8 +40,8 @@ export function AuthProvider({ children }) {
       staffVerified: !!data.staffVerified,
       staffStatusNotice: data.staffStatusNotice || null,
     };
-    localStorage.setItem('campusq_token', data.token);
-    localStorage.setItem('campusq_user', JSON.stringify(sessionUser));
+    sessionStorage.setItem('campusq_token', data.token);
+    sessionStorage.setItem('campusq_user', JSON.stringify(sessionUser));
     setUser(sessionUser);
     return sessionUser;
   };
@@ -65,8 +65,8 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('campusq_token');
-    localStorage.removeItem('campusq_user');
+    sessionStorage.removeItem('campusq_token');
+    sessionStorage.removeItem('campusq_user');
     setUser(null);
   };
 
