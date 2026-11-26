@@ -3,7 +3,7 @@ import Navbar from '../components/Navbar';
 import StatusBadge from '../components/StatusBadge';
 import { campusqApi } from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
-import { fileToBase64DataUrl } from '../data/sampleCatalog';
+import { SAMPLE_TEMPLATES, fileToBase64DataUrl } from '../data/sampleCatalog';
 
 const CATEGORIES = ['ALL', 'CANTEEN', 'XEROX', 'STATIONERY', 'OTHER'];
 const ORDER_STEPS = ['PENDING', 'AWAITING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
@@ -23,6 +23,16 @@ function getVendorCoverImage(vendor) {
   return null;
 }
 
+
+const ALL_SAMPLE_ITEMS = Object.values(SAMPLE_TEMPLATES).flat();
+
+function getProductImage(product) {
+  if (product.imageUrl) return product.imageUrl;
+  const match = ALL_SAMPLE_ITEMS.find(
+    (item) => item.name.toLowerCase() === (product.name || '').toLowerCase()
+  );
+  return match ? match.imageUrl : null;
+}
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -562,8 +572,8 @@ export default function StudentDashboard() {
                           const outOfStock = p.stockQuantity !== null && p.stockQuantity <= 0;
                           return (
                             <div key={p.id} className="product-card">
-                              {p.imageUrl ? (
-                                <img src={p.imageUrl} alt={p.name} className="product-img" />
+                              {getProductImage(p) ? (
+                                <img src={getProductImage(p)} alt={p.name} className="product-img" />
                               ) : (
                                 <div
                                   className="product-img"
