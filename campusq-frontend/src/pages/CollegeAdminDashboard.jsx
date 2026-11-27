@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Navbar from '../components/Navbar';
+import DashboardShell from '../components/DashboardShell';
 import StatusBadge from '../components/StatusBadge';
 import { campusqApi } from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
@@ -82,168 +82,138 @@ export default function CollegeAdminDashboard() {
     }
   };
 
+  const navItems = [
+    { key: 'PENDING', icon: '⏳', label: 'Pending Requests' },
+    { key: 'APPROVED', icon: '✅', label: 'Approved Vendors' },
+    { key: 'ALL', icon: '🏪', label: 'All Vendors' },
+    { key: 'COMPLAINTS', icon: '📣', label: 'Student Complaints' },
+  ];
+
   return (
-    <>
-      <Navbar />
-      <main className="page-container">
-        <section className="welcome-banner welcome-admin">
-          <div>
-            <div className="college-pill">
-              🏛️ {user?.collegeName || user?.collegeCode} ({user?.collegeCode})
-            </div>
-            <h1>College Admin Portal</h1>
-            <p style={{ margin: 0, opacity: 0.9 }}>
-              Approve or remove campus vendors and resolve student complaints in your college.
-            </p>
-          </div>
-          <button
-            className="btn btn-outline btn-sm"
-            style={{ background: 'rgba(255,255,255,0.14)', color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}
-            onClick={() => loadData(tab)}
-          >
-            ↻ Refresh
-          </button>
-        </section>
+    <DashboardShell
+      navItems={navItems}
+      activeKey={tab}
+      onSelectNav={setTab}
+      greeting="College Admin Portal"
+      subtitle={`Manage vendors and student complaints for ${user?.collegeName || user?.collegeCode}.`}
+      roleLabel="Role: College Admin"
+      extraHeaderSlot={
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => loadData(tab)}>
+          ↻ Refresh
+        </button>
+      }
+    >
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
 
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
-
-        <div className="tabs">
-          <button
-            className={`tab-btn ${tab === 'PENDING' ? 'active' : ''}`}
-            onClick={() => setTab('PENDING')}
-          >
-            Pending Requests
-          </button>
-          <button
-            className={`tab-btn ${tab === 'APPROVED' ? 'active' : ''}`}
-            onClick={() => setTab('APPROVED')}
-          >
-            Approved Vendors
-          </button>
-          <button
-            className={`tab-btn ${tab === 'ALL' ? 'active' : ''}`}
-            onClick={() => setTab('ALL')}
-          >
-            All College Vendors
-          </button>
-          <button
-            className={`tab-btn ${tab === 'COMPLAINTS' ? 'active' : ''}`}
-            onClick={() => setTab('COMPLAINTS')}
-          >
-            📣 Student Complaints
-          </button>
-        </div>
-
-        {loading ? (
-          <p className="muted">Loading...</p>
-        ) : tab === 'COMPLAINTS' ? (
-          complaints.length === 0 ? (
-            <div className="empty-state">No complaints submitted in your college yet.</div>
-          ) : (
-            <div className="grid-2">
-              {complaints.map((c) => (
-                <div key={c.id} className="card">
-                  <div className="row-between" style={{ marginBottom: 6 }}>
-                    <strong>{c.subject}</strong>
-                    <StatusBadge status={c.status} />
-                  </div>
-                  <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 6 }}>
-                    From: <strong>{c.studentName}</strong> ({c.studentEmail}) • Against:{' '}
-                    <strong>{c.vendorShopName}</strong>
-                    {c.orderId ? ` • Order #${c.orderId}` : ''}
-                  </div>
-                  <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{c.message}</p>
-                  {c.adminReply && (
-                    <div className="alert alert-success" style={{ padding: '8px 12px', marginBottom: 10 }}>
-                      <strong>Your Reply:</strong> {c.adminReply}
-                    </div>
-                  )}
-                  <div className="row-gap">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => {
-                        setReplyTarget(c);
-                        setReplyForm({ status: 'RESOLVED', adminReply: c.adminReply || '' });
-                      }}
-                    >
-                      Reply / Update Status
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleVendorAction(c.vendorId, 'delete', c.vendorShopName)}
-                    >
-                      Reject &amp; Disable Vendor
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : vendors.length === 0 ? (
-          <div className="empty-state">No vendors found in this tab.</div>
+      {loading ? (
+        <p className="muted">Loading...</p>
+      ) : tab === 'COMPLAINTS' ? (
+        complaints.length === 0 ? (
+          <div className="empty-state">No complaints submitted in your college yet.</div>
         ) : (
-          <div className="grid-3">
-            {vendors.map((v) => (
-              <div key={v.vendorId} className="card">
-                <div className="row-between" style={{ marginBottom: 8 }}>
-                  <h3 style={{ margin: 0, fontSize: '1.06rem' }}>{v.shopName}</h3>
-                  <StatusBadge status={v.approvalStatus} />
+          <div className="grid-2">
+            {complaints.map((c) => (
+              <div key={c.id} className="card">
+                <div className="row-between" style={{ marginBottom: 6 }}>
+                  <strong>{c.subject}</strong>
+                  <StatusBadge status={c.status} />
                 </div>
-                <p className="muted" style={{ margin: '0 0 8px' }}>
-                  {v.description || 'No description provided'}
-                </p>
-                <div style={{ fontSize: '0.86rem', marginBottom: 10 }}>
-                  <div>
-                    <strong>Owner:</strong> {v.ownerName} ({v.email})
-                  </div>
-                  <div>
-                    <strong>Location:</strong> {v.location}
-                  </div>
-                  <div>
-                    <strong>Account:</strong> {v.active ? 'Active' : 'Deactivated'}
-                  </div>
+                <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 6 }}>
+                  From: <strong>{c.studentName}</strong> ({c.studentEmail}) • Against:{' '}
+                  <strong>{c.vendorShopName}</strong>
+                  {c.orderId ? ` • Order #${c.orderId}` : ''}
                 </div>
-                <div className="row-gap" style={{ marginBottom: 14 }}>
-                  {(v.categories || []).map((cat) => (
-                    <span key={cat} className="badge badge-primary">
-                      {cat === 'OTHER' && v.customCategory ? v.customCategory : cat}
-                    </span>
-                  ))}
-                </div>
-
+                <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{c.message}</p>
+                {c.adminReply && (
+                  <div className="alert alert-success" style={{ padding: '8px 12px', marginBottom: 10 }}>
+                    <strong>Your Reply:</strong> {c.adminReply}
+                  </div>
+                )}
                 <div className="row-gap">
-                  {v.approvalStatus === 'PENDING' && (
-                    <>
-                      <button
-                        className="btn btn-success btn-sm"
-                        onClick={() => handleVendorAction(v.vendorId, 'approve', v.shopName)}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleVendorAction(v.vendorId, 'reject', v.shopName)}
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  {v.active && (
-                    <button
-                      className="btn btn-outline btn-sm"
-                      style={{ color: 'var(--danger)', borderColor: '#fecaca' }}
-                      onClick={() => handleVendorAction(v.vendorId, 'delete', v.shopName)}
-                    >
-                      Remove / Disable
-                    </button>
-                  )}
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      setReplyTarget(c);
+                      setReplyForm({ status: 'RESOLVED', adminReply: c.adminReply || '' });
+                    }}
+                  >
+                    Reply / Update Status
+                  </button>
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => handleVendorAction(c.vendorId, 'delete', c.vendorShopName)}
+                  >
+                    Reject &amp; Disable Vendor
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </main>
+        )
+      ) : vendors.length === 0 ? (
+        <div className="empty-state">No vendors found in this tab.</div>
+      ) : (
+        <div className="grid-3">
+          {vendors.map((v) => (
+            <div key={v.vendorId} className="card">
+              <div className="row-between" style={{ marginBottom: 8 }}>
+                <h3 style={{ margin: 0, fontSize: '1.06rem' }}>{v.shopName}</h3>
+                <StatusBadge status={v.approvalStatus} />
+              </div>
+              <p className="muted" style={{ margin: '0 0 8px' }}>
+                {v.description || 'No description provided'}
+              </p>
+              <div style={{ fontSize: '0.86rem', marginBottom: 10 }}>
+                <div>
+                  <strong>Owner:</strong> {v.ownerName} ({v.email})
+                </div>
+                <div>
+                  <strong>Location:</strong> {v.location}
+                </div>
+                <div>
+                  <strong>Account:</strong> {v.active ? 'Active' : 'Deactivated'}
+                </div>
+              </div>
+              <div className="row-gap" style={{ marginBottom: 14 }}>
+                {(v.categories || []).map((cat) => (
+                  <span key={cat} className="badge badge-primary">
+                    {cat === 'OTHER' && v.customCategory ? v.customCategory : cat}
+                  </span>
+                ))}
+              </div>
+
+              <div className="row-gap">
+                {v.approvalStatus === 'PENDING' && (
+                  <>
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => handleVendorAction(v.vendorId, 'approve', v.shopName)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleVendorAction(v.vendorId, 'reject', v.shopName)}
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+                {v.active && (
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ color: 'var(--danger)', borderColor: '#fecaca' }}
+                    onClick={() => handleVendorAction(v.vendorId, 'delete', v.shopName)}
+                  >
+                    Remove / Disable
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {replyTarget && (
         <div className="modal-backdrop">
@@ -292,6 +262,6 @@ export default function CollegeAdminDashboard() {
           </div>
         </div>
       )}
-    </>
+    </DashboardShell>
   );
 }

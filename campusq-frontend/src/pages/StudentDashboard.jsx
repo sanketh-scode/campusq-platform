@@ -1,29 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import Navbar from '../components/Navbar';
+import React, { useEffect, useMemo, useState } from 'react';
+import DashboardShell from '../components/DashboardShell';
 import StatusBadge from '../components/StatusBadge';
 import { campusqApi } from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { SAMPLE_TEMPLATES, fileToBase64DataUrl } from '../data/sampleCatalog';
 
-const CATEGORIES = ['ALL', 'CANTEEN', 'XEROX', 'STATIONERY', 'OTHER'];
+const CATEGORY_TABS = [
+  { key: 'CANTEEN', label: 'Canteen', icon: '🍽️', cover: '/cat-canteen.jpg' },
+  { key: 'STATIONERY', label: 'Stationery', icon: '✏️', cover: '/cat-stationery.jpg' },
+  { key: 'XEROX', label: 'Xerox', icon: '🖨️', cover: '/cat-xerox.jpg' },
+  { key: 'OTHER', label: 'Other', icon: '✨', cover: '/cat-stationery.jpg' },
+  { key: 'ALL', label: 'All Shops', icon: '🏪', cover: '/cat-canteen.jpg' },
+];
+
 const ORDER_STEPS = ['PENDING', 'AWAITING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
-
-const CATEGORY_COVERS = {
-  CANTEEN: '/cat-canteen.jpg',
-  XEROX: '/cat-xerox.jpg',
-  STATIONERY: '/cat-stationery.jpg',
-};
-
-function getVendorCoverImage(vendor) {
-  if (vendor.shopImage) return vendor.shopImage;
-  const cats = vendor.categories || [];
-  for (const c of ['CANTEEN', 'XEROX', 'STATIONERY']) {
-    if (cats.includes(c)) return CATEGORY_COVERS[c];
-  }
-  return null;
-}
-
-
 const ALL_SAMPLE_ITEMS = Object.values(SAMPLE_TEMPLATES).flat();
 
 function getProductImage(product) {
@@ -34,33 +24,78 @@ function getProductImage(product) {
   return match ? match.imageUrl : null;
 }
 
+function getHeroMeta(catKey) {
+  if (catKey === 'STATIONERY') {
+    return {
+      titleStart: 'Stationery',
+      titleAccent: 'Essentials',
+      sub: 'Notebooks, pens, files, markers, and more at your campus store.',
+      cover: '/cat-stationery.jpg',
+    };
+  }
+  if (catKey === 'XEROX') {
+    return {
+      titleStart: 'Xerox & Printing',
+      titleAccent: 'Service',
+      sub: 'Upload your PDF or image, customize print options, and pick up with your token.',
+      cover: '/cat-xerox.jpg',
+    };
+  }
+  if (catKey === 'OTHER') {
+    return {
+      titleStart: 'Campus',
+      titleAccent: 'Services',
+      sub: 'Explore additional campus shops and student services.',
+      cover: '/cat-stationery.jpg',
+    };
+  }
+  return {
+    titleStart: 'Campus',
+    titleAccent: 'Canteen',
+    sub: 'Pre-order your favorite meals and skip the queue.',
+    cover: '/cat-canteen.jpg',
+  };
+}
+
 export default function StudentDashboard() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('BROWSE');
-  const [category, setCategory] = useState('ALL');
+  const [navTab, setNavTab] = useState('HOME');
+  const [category, setCategory] = useState('CANTEEN');
   const [searchQuery, setSearchQuery] = useState('');
+  const [stockFilter, setStockFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('DEFAULT');
+
   const [vendors, setVendors] = useState([]);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [complaints, setComplaints] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
-  // Top Cart Modal & Checkout State
-  const [cartOpen, setCartOpen] = useState(false);
+  // Cart State
   const [cart, setCart] = useState({ vendorId: null, vendorName: '', vendorCategories: [], items: [] });
   const [specialNote, setSpecialNote] = useState('');
+
+  // Xerox Studio State
   const [xerox, setXerox] = useState({
+    productId: '',
     fileName: '',
     fileType: '',
     fileData: '',
+    fileSizeLabel: '',
+    pageMode: 'ALL',
+    pageStart: 1,
+    pageEnd: 10,
     copies: 1,
-    colorMode: 'Black & White',
+    colorMode: 'Normal Xerox (Black & White)',
+    paperSize: 'A4 (210 × 297 mm)',
+    paperType: 'Normal (70 GSM)',
     sides: 'Single-Sided',
-    paperSize: 'A4',
-    binding: 'None',
+    binding: 'No Binding',
+    finishing: [],
   });
 
-  // Payment Modal State (when vendor accepts order -> AWAITING_PAYMENT)
+  // Payment Modal State
   const [payModalOrder, setPayModalOrder] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('ONLINE_UPI');
   const [paymentReference, setPaymentReference] = useState('');
@@ -76,17 +111,49 @@ export default function StudentDashboard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const loadVendorsAndSearch = async (activeCat = category, query = searchQuery) => {
+  const loadVendorProducts = async (vendor) => {
+    if (!vendor) {
+      setProducts([]);
+      return;
+    }
+    try {
+      const data = await campusqApi.getVendorProductsForStudent(vendor.vendorId);
+      const list = data || [];
+      setProducts(list);
+      if (list.length > 0) {
+        setXerox((prev) => ({
+          ...prev,
+          productId: prev.productId && list.some((p) => String(p.id) === String(prev.productId))
+            ? prev.productId
+            : String(list[0].id),
+        }));
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const loadVendorsForCategory = async (activeCat = category, query = '') => {
     setLoading(true);
     setError('');
     try {
       const catParam = activeCat === 'ALL' ? null : activeCat;
       const vendData = await campusqApi.browseVendors(catParam, query);
-      setVendors(vendData || []);
+      const list = vendData || [];
+      setVendors(list);
 
-      if (query.trim() && !selectedVendor) {
-        const prodData = await campusqApi.getAllCollegeProducts(query.trim());
-        setProducts(prodData || []);
+      if (list.length > 0) {
+        const nextVendor = list[0];
+        setSelectedVendor(nextVendor);
+        await loadVendorProducts(nextVendor);
+      } else {
+        setSelectedVendor(null);
+        if (query.trim()) {
+          const prodData = await campusqApi.getAllCollegeProducts(query.trim());
+          setProducts(prodData || []);
+        } else {
+          setProducts([]);
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -113,30 +180,29 @@ export default function StudentDashboard() {
     }
   };
 
+  const loadNotifications = async () => {
+    try {
+      const data = await campusqApi.getNotifications();
+      setNotifications(data || []);
+    } catch {
+      // Ignore
+    }
+  };
+
   useEffect(() => {
-    loadVendorsAndSearch(category, searchQuery);
+    loadVendorsForCategory(category, '');
   }, [category]);
 
   useEffect(() => {
     loadOrders();
     loadComplaints();
+    loadNotifications();
   }, []);
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setSelectedVendor(null);
-    loadVendorsAndSearch(category, searchQuery);
-  };
 
   const handleSelectVendor = async (vendor) => {
     setSelectedVendor(vendor);
     setError('');
-    try {
-      const data = await campusqApi.getVendorProductsForStudent(vendor.vendorId);
-      setProducts(data || []);
-    } catch (err) {
-      setError(err.message);
-    }
+    await loadVendorProducts(vendor);
   };
 
   const updateCartQty = (product, delta) => {
@@ -208,33 +274,81 @@ export default function StudentDashboard() {
     setError('');
     try {
       const dataUrl = await fileToBase64DataUrl(file);
+      const sizeKb = Math.max(1, Math.round(file.size / 1024));
+      const sizeLabel = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
       setXerox((prev) => ({
         ...prev,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileData: dataUrl,
+        fileSizeLabel: sizeLabel,
       }));
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const handlePlaceOrder = async (e) => {
+  const toggleXeroxFinishing = (label) => {
+    setXerox((prev) => {
+      const exists = prev.finishing.includes(label);
+      return {
+        ...prev,
+        finishing: exists
+          ? prev.finishing.filter((f) => f !== label)
+          : [...prev.finishing, label],
+      };
+    });
+  };
+
+  const handlePlaceCartOrder = async (e) => {
     e.preventDefault();
     if (!cart.vendorId || cart.items.length === 0) return;
     setError('');
     setSuccess('');
 
-    const isXeroxOrder =
-      cart.vendorCategories.includes('XEROX') || Boolean(xerox.fileData);
-    const xeroxSummary = isXeroxOrder
-      ? `Copies: ${xerox.copies} | ${xerox.colorMode} | ${xerox.sides} | ${xerox.paperSize} | Binding: ${xerox.binding}`
-      : null;
-
     try {
       const created = await campusqApi.placeOrder({
         vendorId: cart.vendorId,
         items: cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
+        specialNote: specialNote.trim() || null,
+      });
+      setLatestOrder(created);
+      setSuccess(
+        `Order placed! Token #${created.tokenNumber} generated. Once ${created.vendorName} accepts, you can scan & pay.`
+      );
+      setCart({ vendorId: null, vendorName: '', vendorCategories: [], items: [] });
+      setSpecialNote('');
+      await loadOrders();
+      if (selectedVendor) await loadVendorProducts(selectedVendor);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handlePlaceXeroxOrder = async (e) => {
+    e.preventDefault();
+    if (!selectedVendor) {
+      setError('No open Xerox shop selected.');
+      return;
+    }
+    const chosenProduct =
+      products.find((p) => String(p.id) === String(xerox.productId)) || products[0];
+    if (!chosenProduct) {
+      setError('This Xerox shop has no printing service item listed yet.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+
+    const rangeLabel =
+      xerox.pageMode === 'ALL' ? 'All Pages' : `Pages ${xerox.pageStart}–${xerox.pageEnd}`;
+    const finishLabel = xerox.finishing.length > 0 ? xerox.finishing.join(', ') : 'None';
+    const xeroxSummary = `${rangeLabel} | Copies: ${xerox.copies} | ${xerox.colorMode} | ${xerox.paperSize} | ${xerox.paperType} | ${xerox.sides} | Binding: ${xerox.binding} | Finishing: ${finishLabel}`;
+
+    try {
+      const created = await campusqApi.placeOrder({
+        vendorId: selectedVendor.vendorId,
+        items: [{ productId: chosenProduct.id, quantity: Math.max(1, Number(xerox.copies) || 1) }],
         specialNote: specialNote.trim() || null,
         xeroxFileName: xerox.fileName || null,
         xeroxFileType: xerox.fileType || null,
@@ -243,25 +357,19 @@ export default function StudentDashboard() {
       });
       setLatestOrder(created);
       setSuccess(
-        `Order placed! Token #${created.tokenNumber} generated. Once ${created.vendorName} accepts your order, you can scan & pay.`
+        `Xerox order placed! Token #${created.tokenNumber} sent to ${created.vendorName}.`
       );
-      setCart({ vendorId: null, vendorName: '', vendorCategories: [], items: [] });
       setSpecialNote('');
-      setXerox({
+      setXerox((prev) => ({
+        ...prev,
         fileName: '',
         fileType: '',
         fileData: '',
+        fileSizeLabel: '',
         copies: 1,
-        colorMode: 'Black & White',
-        sides: 'Single-Sided',
-        paperSize: 'A4',
-        binding: 'None',
-      });
-      setCartOpen(false);
+      }));
       await loadOrders();
-      if (selectedVendor) {
-        handleSelectVendor(selectedVendor);
-      }
+      setNavTab('ORDERS');
     } catch (err) {
       setError(err.message);
     }
@@ -336,583 +444,421 @@ export default function StudentDashboard() {
     }
   };
 
-  const topCartButton = (
-    <button
-      type="button"
-      className="btn btn-primary btn-sm"
-      onClick={() => setCartOpen(true)}
-    >
-      🛒 Cart ({cartItemCount}) {cartItemCount > 0 ? `• ₹${cartTotal.toFixed(0)}` : ''}
-    </button>
-  );
+  const filteredProducts = useMemo(() => {
+    let list = [...products];
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (p) =>
+          (p.name || '').toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q)
+      );
+    }
+    if (stockFilter === 'IN_STOCK') {
+      list = list.filter((p) => p.stockQuantity === null || p.stockQuantity > 0);
+    }
+    if (sortBy === 'PRICE_ASC') {
+      list.sort((a, b) => Number(a.price) - Number(b.price));
+    } else if (sortBy === 'PRICE_DESC') {
+      list.sort((a, b) => Number(b.price) - Number(a.price));
+    }
+    return list;
+  }, [products, searchQuery, stockFilter, sortBy]);
+
+  const activeOrdersCount = orders.filter(
+    (o) => !['COMPLETED', 'CANCELLED'].includes(o.status)
+  ).length;
+  const unreadNotifsCount = notifications.filter((n) => !n.read).length;
+
+  const navItems = [
+    { key: 'HOME', icon: '🏠', label: 'Home' },
+    { key: 'ORDERS', icon: '🛍️', label: 'My Orders', badge: activeOrdersCount },
+    { key: 'CART', icon: '🛒', label: 'Cart', badge: cartItemCount },
+    { key: 'NOTIFICATIONS', icon: '🔔', label: 'Notifications', badge: unreadNotifsCount },
+    { key: 'COMPLAINTS', icon: '💬', label: 'Help & Support', badge: complaints.length },
+    { key: 'PROFILE', icon: '👤', label: 'Profile' },
+  ];
+
+  const heroMeta = getHeroMeta(category);
+  const heroBg = selectedVendor?.shopImage || heroMeta.cover;
+  const firstName = (user?.fullName || 'Student').split(' ')[0];
+  const selectedXeroxProduct =
+    products.find((p) => String(p.id) === String(xerox.productId)) || products[0];
+  const estimatedXeroxTotal = selectedXeroxProduct
+    ? Number(selectedXeroxProduct.price) * Math.max(1, Number(xerox.copies) || 1)
+    : 0;
 
   return (
-    <>
-      <Navbar rightSlot={topCartButton} />
-      <main className="page-container">
-        <section className="welcome-banner welcome-student">
-          <div>
-            <div className="college-pill">
-              🏫 {user?.collegeName || user?.collegeCode} ({user?.collegeCode})
-            </div>
-            <h1>Welcome to CampusQ, {user?.fullName}!</h1>
-            <p style={{ margin: 0, opacity: 0.9 }}>
-              {user?.role === 'STAFF'
-                ? 'Your orders carry a ★ STAFF priority badge for faster campus counter service.'
-                : 'Browse campus shops, check live stock, order ahead, and collect with your daily token.'}
-            </p>
-          </div>
-          <div className="row-gap">
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ background: 'rgba(255,255,255,0.14)', color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}
-              onClick={() => {
-                loadVendorsAndSearch(category, searchQuery);
-                loadOrders();
-                loadComplaints();
-              }}
-            >
-              ↻ Refresh
-            </button>
-          </div>
-        </section>
+    <DashboardShell
+      navItems={navItems}
+      activeKey={navTab}
+      onSelectNav={(k) => {
+        if (k === 'CART') {
+          setNavTab('HOME');
+          setTimeout(() => {
+            document.getElementById('student-cart-panel')?.scrollIntoView({ behavior: 'smooth' });
+          }, 80);
+          return;
+        }
+        setNavTab(k);
+        if (k === 'ORDERS') loadOrders();
+        if (k === 'NOTIFICATIONS') loadNotifications();
+        if (k === 'COMPLAINTS') loadComplaints();
+      }}
+      greeting={`Welcome back, ${firstName} 👋`}
+      subtitle="Order from campus canteen, stationery, or xerox services."
+      roleLabel={user?.role === 'STAFF' ? '★ Role: Staff Priority' : 'Role: Student / Staff'}
+      extraHeaderSlot={
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => {
+            loadVendorsForCategory(category, '');
+            loadOrders();
+          }}
+        >
+          ↻ Refresh
+        </button>
+      }
+    >
+      {user?.staffStatusNotice && (
+        <div className="alert alert-warning">{user.staffStatusNotice}</div>
+      )}
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
 
-        {user?.staffStatusNotice && (
-          <div className="alert alert-warning">{user.staffStatusNotice}</div>
-        )}
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
-
-        {latestOrder && (
-          <div className="card" style={{ marginBottom: 18, borderColor: '#99f6e4', background: '#f0fdfa' }}>
-            <div className="row-between">
-              <div className="row-gap">
-                <div className="token-box">
-                  <span className="token-label">Token</span>
-                  <span className="token-num">#{latestOrder.tokenNumber}</span>
+      {latestOrder && navTab === 'HOME' && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            borderColor: '#99f6e4',
+            background: '#e6f4f1',
+          }}
+        >
+          <div className="row-between">
+            <div className="row-gap">
+              <div className="token-box">
+                <span className="token-label">Token</span>
+                <span className="token-num">#{latestOrder.tokenNumber}</span>
+              </div>
+              <div>
+                <div style={{ fontWeight: 800 }}>
+                  {latestOrder.vendorName} • ₹{Number(latestOrder.totalAmount).toFixed(2)}
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                    {latestOrder.vendorName} • Total ₹{Number(latestOrder.totalAmount).toFixed(2)}
-                  </div>
-                  <div className="muted">
-                    Status: <strong>{latestOrder.status.replace('_', ' ')}</strong> — Pay once vendor accepts.
-                  </div>
+                <div className="muted">
+                  Status: <strong>{latestOrder.status.replace('_', ' ')}</strong> — Pay once
+                  vendor accepts.
                 </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setTab('ORDERS')}>
-                Track &amp; Pay
-              </button>
             </div>
+            <button className="btn btn-primary btn-sm" onClick={() => setNavTab('ORDERS')}>
+              Track &amp; Pay →
+            </button>
           </div>
-        )}
-
-        <div className="tabs">
-          <button
-            className={`tab-btn ${tab === 'BROWSE' ? 'active' : ''}`}
-            onClick={() => setTab('BROWSE')}
-          >
-            🛍️ Browse Shops &amp; Menu
-          </button>
-          <button
-            className={`tab-btn ${tab === 'ORDERS' ? 'active' : ''}`}
-            onClick={() => {
-              setTab('ORDERS');
-              loadOrders();
-            }}
-          >
-            🎫 My Orders &amp; Tokens ({orders.length})
-          </button>
-          <button
-            className={`tab-btn ${tab === 'COMPLAINTS' ? 'active' : ''}`}
-            onClick={() => {
-              setTab('COMPLAINTS');
-              loadComplaints();
-            }}
-          >
-            📣 My Complaints ({complaints.length})
-          </button>
         </div>
+      )}
 
-        {tab === 'BROWSE' && (
-          <>
-            <form className="shop-toolbar" onSubmit={handleSearchSubmit}>
-              <input
-                className="search-input"
-                placeholder="Search shops or items (e.g. Masala Dosa, Xerox, Canteen)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary">
-                Search
+      {navTab === 'HOME' && (
+        <>
+          <div className="cat-pills-row">
+            {CATEGORY_TABS.map((cat) => (
+              <button
+                key={cat.key}
+                type="button"
+                className={`cat-pill-btn ${category === cat.key ? 'active' : ''}`}
+                onClick={() => {
+                  setCategory(cat.key);
+                  setSearchQuery('');
+                }}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
               </button>
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedVendor(null);
-                    setProducts([]);
-                    loadVendorsAndSearch(category, '');
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </form>
+            ))}
+          </div>
 
-            <div className="pill-group">
-              {CATEGORIES.map((cat) => (
+          <section className="hero-banner-v3">
+            <img src={heroBg} alt={heroMeta.titleStart} className="hero-banner-bg" />
+            <div className="hero-banner-overlay" />
+            <div className="hero-banner-body">
+              <h2>
+                {heroMeta.titleStart} <span>{heroMeta.titleAccent}</span>
+              </h2>
+              <p>{heroMeta.sub}</p>
+
+              <div className="row-gap">
+                {vendors.length > 0 ? (
+                  <select
+                    className="hero-shop-select"
+                    value={selectedVendor?.vendorId || ''}
+                    onChange={(e) => {
+                      const found = vendors.find(
+                        (v) => String(v.vendorId) === e.target.value
+                      );
+                      if (found) handleSelectVendor(found);
+                    }}
+                  >
+                    {vendors.map((v) => (
+                      <option key={v.vendorId} value={v.vendorId}>
+                        📍 {v.shopName} ({v.location})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="hero-shop-select">No open shops in this category</span>
+                )}
+
+                {selectedVendor && (
+                  <button
+                    type="button"
+                    className="hero-shop-select"
+                    onClick={() => setComplaintVendor(selectedVendor)}
+                  >
+                    ⚠ Report Issue
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {vendors.length > 1 && (
+            <div className="shop-chip-strip">
+              {vendors.map((v) => (
                 <button
-                  key={cat}
-                  className={`pill-btn ${category === cat ? 'active' : ''}`}
-                  onClick={() => {
-                    setCategory(cat);
-                    setSelectedVendor(null);
-                    setProducts([]);
-                  }}
+                  key={v.vendorId}
+                  type="button"
+                  className={`shop-chip ${selectedVendor?.vendorId === v.vendorId ? 'active' : ''}`}
+                  onClick={() => handleSelectVendor(v)}
                 >
-                  {cat}
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>🏪 {v.shopName}</div>
+                  <div className="muted" style={{ fontSize: '0.74rem' }}>📍 {v.location}</div>
                 </button>
               ))}
             </div>
+          )}
 
-            {loading ? (
-              <p className="muted">Loading campus shops...</p>
-            ) : vendors.length === 0 && products.length === 0 ? (
-              <div className="empty-state">No open vendors or matching items found in your college.</div>
-            ) : (
-              <>
-                {vendors.length > 0 && (
-                  <div className="grid-3" style={{ marginBottom: 24 }}>
-                    {vendors.map((v) => {
-                      const active = selectedVendor?.vendorId === v.vendorId;
-                      const cover = getVendorCoverImage(v);
-                      return (
-                        <div
-                          key={v.vendorId}
-                          className={`vendor-card ${active ? 'selected' : ''}`}
-                          onClick={() => handleSelectVendor(v)}
-                        >
-                          <div className="vendor-cover-wrap">
-                            {cover ? (
-                              <img src={cover} alt={v.shopName} className="vendor-cover-img" />
-                            ) : (
-                              <div
-                                style={{
-                                  height: '100%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '2.5rem',
-                                  color: '#fff',
-                                }}
-                              >
-                                🏪
-                              </div>
-                            )}
-                            <div className="vendor-cover-overlay">
-                              <span className="badge badge-success" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                                ● OPEN
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="vendor-card-body">
-                            <div>
-                              <h3 style={{ margin: '0 0 5px', fontSize: '1.08rem' }}>{v.shopName}</h3>
-                              <p className="vendor-desc-clamp">
-                                {v.description || 'Campus shop'}
-                              </p>
-                            </div>
-
-                            <div>
-                              <div className="muted" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
-                                📍 {v.location}
-                              </div>
-                              <div className="row-between">
-                                <div className="row-gap">
-                                  {(v.categories || []).map((c) => (
-                                    <span key={c} className="badge badge-primary">
-                                      {c === 'OTHER' && v.customCategory ? v.customCategory : c}
-                                    </span>
-                                  ))}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="admin-subtle-link"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setComplaintVendor(v);
-                                  }}
-                                >
-                                  Report issue
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {(selectedVendor || products.length > 0) && (
-                  <section>
-                    <h2 style={{ margin: '0 0 14px', fontSize: '1.2rem' }}>
-                      {selectedVendor ? `${selectedVendor.shopName} — Menu & Stock` : 'Matching Products'}
-                    </h2>
-                    {products.length === 0 ? (
-                      <div className="empty-state">No available items listed by this vendor yet.</div>
-                    ) : (
-                      <div className="grid-3">
-                        {products.map((p) => {
-                          const qty = getCartQty(p.id);
-                          const outOfStock = p.stockQuantity !== null && p.stockQuantity <= 0;
-                          return (
-                            <div key={p.id} className="product-card">
-                              {getProductImage(p) ? (
-                                <img src={getProductImage(p)} alt={p.name} className="product-img" />
-                              ) : (
-                                <div
-                                  className="product-img"
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '2.2rem',
-                                  }}
-                                >
-                                  🛒
-                                </div>
-                              )}
-                              <div className="product-body">
-                                <div>
-                                  <div className="row-between">
-                                    <strong style={{ fontSize: '1rem' }}>{p.name}</strong>
-                                    <strong style={{ color: 'var(--primary)', fontSize: '1.05rem' }}>
-                                      ₹{Number(p.price).toFixed(2)}
-                                    </strong>
-                                  </div>
-                                  {!selectedVendor && (
-                                    <div className="muted" style={{ fontSize: '0.8rem' }}>
-                                      Sold by {p.vendorName}
-                                    </div>
-                                  )}
-                                  {p.description && (
-                                    <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.84rem' }}>
-                                      {p.description}
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="row-between" style={{ paddingTop: 6 }}>
-                                  <span
-                                    className={`badge ${
-                                      outOfStock
-                                        ? 'badge-danger'
-                                        : p.stockQuantity === null
-                                        ? 'badge-info'
-                                        : 'badge-muted'
-                                    }`}
-                                  >
-                                    {p.stockQuantity === null
-                                      ? 'Service'
-                                      : outOfStock
-                                      ? 'Out of stock'
-                                      : `${p.stockQuantity} left`}
-                                  </span>
-
-                                  {qty === 0 ? (
-                                    <button
-                                      className="btn btn-primary btn-sm"
-                                      disabled={outOfStock}
-                                      onClick={() => updateCartQty(p, 1)}
-                                    >
-                                      + Add
-                                    </button>
-                                  ) : (
-                                    <div className="row-gap">
-                                      <button
-                                        className="btn btn-outline btn-sm"
-                                        onClick={() => updateCartQty(p, -1)}
-                                      >
-                                        −
-                                      </button>
-                                      <strong>{qty}</strong>
-                                      <button
-                                        className="btn btn-outline btn-sm"
-                                        disabled={p.stockQuantity !== null && qty >= p.stockQuantity}
-                                        onClick={() => updateCartQty(p, 1)}
-                                      >
-                                        +
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </section>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {tab === 'ORDERS' && (
-          orders.length === 0 ? (
-            <div className="empty-state">You have not placed any orders yet.</div>
-          ) : (
-            <div className="grid-2">
-              {orders.map((order) => {
-                const currentIdx = ORDER_STEPS.indexOf(order.status);
-                return (
-                  <div key={order.orderId} className="card">
-                    <div className="row-between" style={{ marginBottom: 10 }}>
-                      <div className="row-gap">
-                        <div className="token-box">
-                          <span className="token-label">Token</span>
-                          <span className="token-num">#{order.tokenNumber}</span>
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700 }}>{order.vendorName}</div>
-                          <div className="muted" style={{ fontSize: '0.82rem' }}>
-                            Order #{order.orderId} • {order.tokenDate}
-                          </div>
-                          {order.staffOrder && (
-                            <span className="badge badge-staff" style={{ marginTop: 4 }}>
-                              ★ STAFF PRIORITY
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <StatusBadge status={order.status} />
-                    </div>
-
-                    {order.status !== 'CANCELLED' && (
-                      <div className="stepper">
-                        {ORDER_STEPS.map((step, idx) => (
-                          <span
-                            key={step}
-                            className={`step-item ${
-                              idx < currentIdx ? 'done' : idx === currentIdx ? 'current' : ''
-                            }`}
-                          >
-                            {step.replace('_', ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 8 }}>
-                      {(order.items || []).map((item, idx) => (
-                        <div key={idx} className="row-between" style={{ fontSize: '0.9rem', marginBottom: 4 }}>
-                          <span>
-                            {item.productName} × {item.quantity}
-                          </span>
-                          <span>₹{Number(item.subtotal).toFixed(2)}</span>
-                        </div>
-                      ))}
-                      {order.specialNote && (
-                        <div className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
-                          <strong>Note:</strong> {order.specialNote}
-                        </div>
-                      )}
-                      {order.xeroxConfig && (
-                        <div className="muted" style={{ fontSize: '0.84rem', marginTop: 4 }}>
-                          <strong>Print Format:</strong> {order.xeroxConfig}{' '}
-                          {order.xeroxFileName ? `(${order.xeroxFileName})` : ''}
-                        </div>
-                      )}
-                      <div className="row-between" style={{ fontWeight: 800, marginTop: 8 }}>
-                        <span>Total • Payment: {order.paymentStatus}</span>
-                        <span>₹{Number(order.totalAmount).toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="row-gap" style={{ marginTop: 12 }}>
-                      {order.status === 'AWAITING_PAYMENT' && (
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => {
-                            setPayModalOrder(order);
-                            setPaymentMethod(order.vendorQrCodeImage ? 'ONLINE_UPI' : 'COD');
-                          }}
-                        >
-                          💳 Pay Now (QR / COD)
-                        </button>
-                      )}
-                      {order.status === 'READY' && (
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={() => handleCompleteOrder(order.orderId)}
-                        >
-                          ✓ Confirm Collected / Complete
-                        </button>
-                      )}
-                      {(order.status === 'PENDING' || order.status === 'AWAITING_PAYMENT') && (
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleCancelOrder(order.orderId)}
-                        >
-                          Cancel Order
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )
-        )}
-
-        {tab === 'COMPLAINTS' && (
-          <div>
-            <div className="row-between" style={{ marginBottom: 14 }}>
-              <p className="muted" style={{ margin: 0 }}>
-                Report vendor issues directly to your College Admin.
-              </p>
-              {vendors.length > 0 && (
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setComplaintVendor(vendors[0])}
-                >
-                  + New Complaint
-                </button>
-              )}
-            </div>
-            {complaints.length === 0 ? (
-              <div className="empty-state">No complaints filed.</div>
-            ) : (
-              <div className="grid-2">
-                {complaints.map((c) => (
-                  <div key={c.id} className="card">
-                    <div className="row-between" style={{ marginBottom: 6 }}>
-                      <strong>{c.subject}</strong>
-                      <StatusBadge status={c.status} />
-                    </div>
-                    <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 6 }}>
-                      Vendor: <strong>{c.vendorShopName}</strong>
-                      {c.orderId ? ` • Order #${c.orderId}` : ''}
-                    </div>
-                    <p style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>{c.message}</p>
-                    {c.adminReply && (
-                      <div className="alert alert-success" style={{ marginBottom: 0 }}>
-                        <strong>Admin Reply:</strong> {c.adminReply}
-                      </div>
-                    )}
-                  </div>
-                ))}
+          {category === 'XEROX' ? (
+            loading ? (
+              <p className="muted">Loading Xerox shops...</p>
+            ) : !selectedVendor ? (
+              <div className="empty-state">
+                No open Xerox &amp; Printing vendor found in your college yet.
               </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* Top Cart Drawer Modal */}
-      {cartOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <div className="row-between" style={{ marginBottom: 12 }}>
-              <h2 style={{ margin: 0 }}>Your Cart</h2>
-              <button className="btn btn-outline btn-sm" onClick={() => setCartOpen(false)}>
-                ✕
-              </button>
-            </div>
-
-            {cart.items.length === 0 ? (
-              <p className="muted">Your cart is empty. Add items from a campus shop first.</p>
             ) : (
-              <form onSubmit={handlePlaceOrder}>
-                <p className="muted" style={{ marginTop: 0 }}>
-                  Ordering from <strong>{cart.vendorName}</strong>
-                </p>
+              <form className="xerox-studio-grid" onSubmit={handlePlaceXeroxOrder}>
+                <div className="card">
+                  <h3 style={{ marginTop: 0 }}>Upload Your Document</h3>
+                  <label className="dropzone-box">
+                    <span style={{ fontSize: '2rem' }}>☁️</span>
+                    <strong>Click to upload PDF or Image</strong>
+                    <span className="muted">PDF, PNG, JPG allowed (max 2 MB)</span>
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleXeroxFile}
+                    />
+                  </label>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                  {cart.items.map(({ product, quantity }) => (
-                    <div key={product.id} className="row-between">
-                      <span>
-                        {product.name} × {quantity}
-                      </span>
-                      <strong>₹{(Number(product.price) * quantity).toFixed(2)}</strong>
+                  {xerox.fileName && (
+                    <div
+                      className="row-between"
+                      style={{
+                        marginTop: 12,
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface-muted)',
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: '0.9rem' }}>📄 {xerox.fileName}</strong>
+                        <div className="muted" style={{ fontSize: '0.78rem' }}>
+                          {xerox.fileSizeLabel}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() =>
+                          setXerox((prev) => ({
+                            ...prev,
+                            fileName: '',
+                            fileType: '',
+                            fileData: '',
+                            fileSizeLabel: '',
+                          }))
+                        }
+                      >
+                        ✕
+                      </button>
                     </div>
-                  ))}
+                  )}
+
+                  <div className="form-group" style={{ marginTop: 14, marginBottom: 0 }}>
+                    <label>Document Description / Instructions</label>
+                    <textarea
+                      className="textarea"
+                      rows={3}
+                      placeholder="e.g. DBMS Unit 3 notes — staple top-left, urgent before 1 PM..."
+                      value={specialNote}
+                      onChange={(e) => setSpecialNote(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                {(cart.vendorCategories.includes('XEROX') || xerox.fileData) && (
-                  <div
-                    style={{
-                      background: 'var(--surface-muted)',
-                      padding: 12,
-                      borderRadius: 10,
-                      marginBottom: 14,
-                    }}
-                  >
-                    <strong style={{ display: 'block', marginBottom: 8 }}>
-                      🖨️ Xerox Print File &amp; Format
-                    </strong>
-                    <div className="form-group">
-                      <label>Upload PDF or Image (max 2 MB)</label>
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        className="input"
-                        onChange={handleXeroxFile}
-                      />
-                      {xerox.fileName && (
-                        <small className="muted">Attached: {xerox.fileName}</small>
+                <div className="card">
+                  <h3 style={{ marginTop: 0 }}>Customize Your Xerox / Print</h3>
+
+                  <div className="form-group">
+                    <label>Print Service Item ({selectedVendor.shopName})</label>
+                    {products.length === 0 ? (
+                      <div className="alert alert-warning">
+                        This vendor hasn&apos;t added Xerox service items yet.
+                      </div>
+                    ) : (
+                      <select
+                        className="select"
+                        value={xerox.productId}
+                        onChange={(e) => setXerox({ ...xerox, productId: e.target.value })}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} — ₹{Number(p.price).toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="grid-2" style={{ gap: 12, marginBottom: 12 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Page Range</label>
+                      <div className="row-gap">
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            xerox.pageMode === 'ALL' ? 'btn-primary' : 'btn-outline'
+                          }`}
+                          onClick={() => setXerox({ ...xerox, pageMode: 'ALL' })}
+                        >
+                          All Pages
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            xerox.pageMode === 'CUSTOM' ? 'btn-primary' : 'btn-outline'
+                          }`}
+                          onClick={() => setXerox({ ...xerox, pageMode: 'CUSTOM' })}
+                        >
+                          Custom Range
+                        </button>
+                      </div>
+                      {xerox.pageMode === 'CUSTOM' && (
+                        <div className="row-gap" style={{ marginTop: 8 }}>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input"
+                            style={{ width: 80 }}
+                            value={xerox.pageStart}
+                            onChange={(e) =>
+                              setXerox({ ...xerox, pageStart: Number(e.target.value) || 1 })
+                            }
+                          />
+                          <span>to</span>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input"
+                            style={{ width: 80 }}
+                            value={xerox.pageEnd}
+                            onChange={(e) =>
+                              setXerox({ ...xerox, pageEnd: Number(e.target.value) || 1 })
+                            }
+                          />
+                        </div>
                       )}
                     </div>
-                    <div className="grid-2" style={{ gap: 8 }}>
-                      <div className="form-group">
-                        <label>Copies</label>
-                        <input
-                          type="number"
-                          min="1"
-                          className="input"
-                          value={xerox.copies}
-                          onChange={(e) =>
-                            setXerox({ ...xerox, copies: Number(e.target.value) || 1 })
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Copy Quantity</label>
+                      <div className="qty-stepper">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setXerox((p) => ({ ...p, copies: Math.max(1, p.copies - 1) }))
                           }
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Color</label>
-                        <select
-                          className="select"
-                          value={xerox.colorMode}
-                          onChange={(e) => setXerox({ ...xerox, colorMode: e.target.value })}
                         >
-                          <option>Black &amp; White</option>
-                          <option>Color</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Sides</label>
-                        <select
-                          className="select"
-                          value={xerox.sides}
-                          onChange={(e) => setXerox({ ...xerox, sides: e.target.value })}
+                          −
+                        </button>
+                        <strong>{xerox.copies}</strong>
+                        <button
+                          type="button"
+                          onClick={() => setXerox((p) => ({ ...p, copies: p.copies + 1 }))}
                         >
-                          <option>Single-Sided</option>
-                          <option>Double-Sided</option>
-                        </select>
+                          +
+                        </button>
                       </div>
-                      <div className="form-group">
-                        <label>Paper Size</label>
-                        <select
-                          className="select"
-                          value={xerox.paperSize}
-                          onChange={(e) => setXerox({ ...xerox, paperSize: e.target.value })}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Print Type</label>
+                    <div className="option-card-grid">
+                      {['Normal Xerox (Black & White)', 'Color Xerox'].map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={`option-pill ${xerox.colorMode === mode ? 'active' : ''}`}
+                          onClick={() => setXerox({ ...xerox, colorMode: mode })}
                         >
-                          <option>A4</option>
-                          <option>A3</option>
-                        </select>
+                          <strong>{mode}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid-2" style={{ gap: 12, marginBottom: 12 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Paper Size</label>
+                      <select
+                        className="select"
+                        value={xerox.paperSize}
+                        onChange={(e) => setXerox({ ...xerox, paperSize: e.target.value })}
+                      >
+                        <option>A4 (210 × 297 mm)</option>
+                        <option>A3 (297 × 420 mm)</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Paper Type</label>
+                      <select
+                        className="select"
+                        value={xerox.paperType}
+                        onChange={(e) => setXerox({ ...xerox, paperType: e.target.value })}
+                      >
+                        <option>Normal (70 GSM)</option>
+                        <option>Bond Paper (100 GSM)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid-2" style={{ gap: 12, marginBottom: 12 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Print Side</label>
+                      <div className="option-card-grid">
+                        {['Single-Sided', 'Double-Sided'].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`option-pill ${xerox.sides === s ? 'active' : ''}`}
+                            onClick={() => setXerox({ ...xerox, sides: s })}
+                          >
+                            <strong>{s}</strong>
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
@@ -922,45 +868,555 @@ export default function StudentDashboard() {
                         value={xerox.binding}
                         onChange={(e) => setXerox({ ...xerox, binding: e.target.value })}
                       >
-                        <option>None</option>
+                        <option>No Binding</option>
+                        <option>Staple (Top Left)</option>
                         <option>Spiral Binding</option>
-                        <option>Soft Binding</option>
-                        <option>Lamination</option>
+                        <option>Hard Binding</option>
                       </select>
                     </div>
                   </div>
-                )}
 
-                <div className="form-group">
-                  <label>Special Instructions / Quick Note to Vendor (Optional)</label>
-                  <textarea
-                    className="textarea"
-                    rows={2}
-                    placeholder="e.g. Less spicy, pack separately, need urgently before 1 PM..."
-                    value={specialNote}
-                    onChange={(e) => setSpecialNote(e.target.value)}
-                  />
+                  <div className="form-group">
+                    <label>Finishing (Optional)</label>
+                    <div className="row-gap">
+                      {['Lamination', 'Hole Punch', 'Cut to Size'].map((fin) => (
+                        <label
+                          key={fin}
+                          className="row-gap"
+                          style={{
+                            fontWeight: 600,
+                            fontSize: '0.84rem',
+                            border: '1px solid var(--border)',
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={xerox.finishing.includes(fin)}
+                            onChange={() => toggleXeroxFinishing(fin)}
+                          />
+                          {fin}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div
+                    className="row-between"
+                    style={{
+                      background: 'var(--primary-soft)',
+                      border: '1px solid #99f6e4',
+                      borderRadius: 12,
+                      padding: '12px 14px',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: '#0f766e' }}>Estimated Price</strong>
+                      <div className="muted" style={{ fontSize: '0.78rem' }}>
+                        {xerox.copies} × ₹
+                        {selectedXeroxProduct ? Number(selectedXeroxProduct.price).toFixed(2) : '0.00'}
+                      </div>
+                    </div>
+                    <strong style={{ fontSize: '1.35rem', color: '#059669' }}>
+                      ₹{estimatedXeroxTotal.toFixed(2)}
+                    </strong>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '12px 16px' }}
+                    disabled={products.length === 0}
+                  >
+                    🛒 Place Xerox Order →
+                  </button>
                 </div>
-
-                <div
-                  className="row-between"
-                  style={{
-                    borderTop: '1px solid var(--border)',
-                    paddingTop: 12,
-                    marginBottom: 14,
-                    fontSize: '1.1rem',
-                    fontWeight: 800,
-                  }}
-                >
-                  <span>Total</span>
-                  <span>₹{cartTotal.toFixed(2)}</span>
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                  Place Order &amp; Request Vendor Acceptance
-                </button>
               </form>
+            )
+          ) : (
+            <div className="workspace-split">
+              <div>
+                <div className="shop-toolbar">
+                  <input
+                    className="search-input"
+                    placeholder={`Search ${category.toLowerCase()} items...`}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  <select
+                    className="select"
+                    style={{ width: 'auto' }}
+                    value={stockFilter}
+                    onChange={(e) => setStockFilter(e.target.value)}
+                  >
+                    <option value="ALL">Availability: All</option>
+                    <option value="IN_STOCK">In Stock Only</option>
+                  </select>
+                  <select
+                    className="select"
+                    style={{ width: 'auto' }}
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="DEFAULT">Sort: Popular</option>
+                    <option value="PRICE_ASC">Price: Low to High</option>
+                    <option value="PRICE_DESC">Price: High to Low</option>
+                  </select>
+                </div>
+
+                {loading ? (
+                  <p className="muted">Loading campus menu...</p>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="empty-state">
+                    No matching products available in this shop right now.
+                  </div>
+                ) : (
+                  <div className="grid-products-v3">
+                    {filteredProducts.map((p) => {
+                      const qty = getCartQty(p.id);
+                      const outOfStock = p.stockQuantity !== null && p.stockQuantity <= 0;
+                      const lowStock =
+                        p.stockQuantity !== null && p.stockQuantity > 0 && p.stockQuantity <= 8;
+                      return (
+                        <div key={p.id} className="product-card-v3">
+                          {getProductImage(p) ? (
+                            <img
+                              src={getProductImage(p)}
+                              alt={p.name}
+                              className="product-img-v3"
+                            />
+                          ) : (
+                            <div
+                              className="product-img-v3"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '2rem',
+                              }}
+                            >
+                              🛒
+                            </div>
+                          )}
+
+                          <div className="product-body-v3">
+                            <div>
+                              <strong style={{ fontSize: '0.96rem', display: 'block' }}>
+                                {p.name}
+                              </strong>
+                              {p.description && (
+                                <p
+                                  className="muted"
+                                  style={{ margin: '3px 0 6px', fontSize: '0.78rem' }}
+                                >
+                                  {p.description}
+                                </p>
+                              )}
+                              <span
+                                className={`badge ${
+                                  outOfStock
+                                    ? 'badge-danger'
+                                    : lowStock
+                                    ? 'badge-warning'
+                                    : p.stockQuantity === null
+                                    ? 'badge-info'
+                                    : 'badge-success'
+                                }`}
+                              >
+                                {p.stockQuantity === null
+                                  ? 'Service'
+                                  : outOfStock
+                                  ? 'Out of Stock'
+                                  : lowStock
+                                  ? `Low Stock (${p.stockQuantity})`
+                                  : `In Stock (${p.stockQuantity})`}
+                              </span>
+                            </div>
+
+                            <div className="row-between" style={{ paddingTop: 4 }}>
+                              <strong style={{ fontSize: '1.05rem', color: 'var(--text)' }}>
+                                ₹{Number(p.price).toFixed(0)}
+                              </strong>
+
+                              {qty === 0 ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  disabled={outOfStock}
+                                  onClick={() => updateCartQty(p, 1)}
+                                >
+                                  + Add
+                                </button>
+                              ) : (
+                                <div className="qty-stepper">
+                                  <button type="button" onClick={() => updateCartQty(p, -1)}>
+                                    −
+                                  </button>
+                                  <strong>{qty}</strong>
+                                  <button
+                                    type="button"
+                                    disabled={p.stockQuantity !== null && qty >= p.stockQuantity}
+                                    onClick={() => updateCartQty(p, 1)}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Sticky Right Cart Panel */}
+              <aside id="student-cart-panel" className="sticky-panel" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="card">
+                  <div className="row-between" style={{ marginBottom: 12 }}>
+                    <h3 style={{ margin: 0 }}>🛒 Your Cart ({cartItemCount})</h3>
+                    {cartItemCount > 0 && (
+                      <button
+                        type="button"
+                        className="admin-subtle-link"
+                        style={{ color: 'var(--primary-hover)' }}
+                        onClick={() =>
+                          setCart({ vendorId: null, vendorName: '', vendorCategories: [], items: [] })
+                        }
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {cart.items.length === 0 ? (
+                    <p className="muted" style={{ margin: '10px 0' }}>
+                      Add items from the menu to build your campus order.
+                    </p>
+                  ) : (
+                    <form onSubmit={handlePlaceCartOrder}>
+                      <div className="muted" style={{ fontSize: '0.8rem', marginBottom: 10 }}>
+                        Shop: <strong>{cart.vendorName}</strong>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                        {cart.items.map(({ product, quantity }) => (
+                          <div
+                            key={product.id}
+                            className="row-between"
+                            style={{
+                              paddingBottom: 8,
+                              borderBottom: '1px solid var(--border)',
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>
+                                {product.name}
+                              </div>
+                              <div className="muted" style={{ fontSize: '0.78rem' }}>
+                                ₹{Number(product.price).toFixed(0)} × {quantity}
+                              </div>
+                            </div>
+                            <div className="row-gap" style={{ gap: 6 }}>
+                              <div className="qty-stepper">
+                                <button type="button" onClick={() => updateCartQty(product, -1)}>
+                                  −
+                                </button>
+                                <span style={{ fontSize: '0.84rem', fontWeight: 700 }}>
+                                  {quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    product.stockQuantity !== null &&
+                                    quantity >= product.stockQuantity
+                                  }
+                                  onClick={() => updateCartQty(product, 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="form-group">
+                        <label>Special Instructions (Optional)</label>
+                        <input
+                          className="input"
+                          placeholder="e.g. Less spicy, pack separately..."
+                          value={specialNote}
+                          onChange={(e) => setSpecialNote(e.target.value)}
+                        />
+                      </div>
+
+                      <div
+                        className="row-between"
+                        style={{
+                          background: 'var(--primary-soft)',
+                          borderRadius: 10,
+                          padding: '10px 12px',
+                          marginBottom: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        <span>Total</span>
+                        <span style={{ fontSize: '1.15rem', color: '#059669' }}>
+                          ₹{cartTotal.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        style={{ width: '100%', padding: '11px 16px' }}
+                      >
+                        Place Order →
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                {selectedVendor && (
+                  <div
+                    className="card"
+                    style={{
+                      background: 'var(--primary-soft)',
+                      borderColor: '#99f6e4',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      Pickup Counter
+                    </div>
+                    <div style={{ fontWeight: 800, marginTop: 2 }}>{selectedVendor.shopName}</div>
+                    <div style={{ fontSize: '0.84rem', color: '#0f766e', fontWeight: 700, marginTop: 6 }}>
+                      ⏱ Estimated Ready Time: 10 – 15 mins
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </div>
+          )}
+        </>
+      )}
+
+      {navTab === 'ORDERS' && (
+        orders.length === 0 ? (
+          <div className="empty-state">You have not placed any orders yet.</div>
+        ) : (
+          <div className="grid-2">
+            {orders.map((order) => {
+              const currentIdx = ORDER_STEPS.indexOf(order.status);
+              return (
+                <div key={order.orderId} className="card">
+                  <div className="row-between" style={{ marginBottom: 10 }}>
+                    <div className="row-gap">
+                      <div className="token-box">
+                        <span className="token-label">Token</span>
+                        <span className="token-num">#{order.tokenNumber}</span>
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{order.vendorName}</div>
+                        <div className="muted" style={{ fontSize: '0.82rem' }}>
+                          Order #{order.orderId} • {order.tokenDate}
+                        </div>
+                        {order.staffOrder && (
+                          <span className="badge badge-staff" style={{ marginTop: 4 }}>
+                            ★ STAFF PRIORITY
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <StatusBadge status={order.status} />
+                  </div>
+
+                  {order.status !== 'CANCELLED' && (
+                    <div className="stepper">
+                      {ORDER_STEPS.map((step, idx) => (
+                        <span
+                          key={step}
+                          className={`step-item ${
+                            idx < currentIdx ? 'done' : idx === currentIdx ? 'current' : ''
+                          }`}
+                        >
+                          {step.replace('_', ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 8 }}>
+                    {(order.items || []).map((item, idx) => (
+                      <div key={idx} className="row-between" style={{ fontSize: '0.9rem', marginBottom: 4 }}>
+                        <span>
+                          {item.productName} × {item.quantity}
+                        </span>
+                        <span>₹{Number(item.subtotal).toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {order.specialNote && (
+                      <div className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
+                        <strong>Note:</strong> {order.specialNote}
+                      </div>
+                    )}
+                    {order.xeroxConfig && (
+                      <div className="muted" style={{ fontSize: '0.84rem', marginTop: 4 }}>
+                        <strong>Print Format:</strong> {order.xeroxConfig}{' '}
+                        {order.xeroxFileName ? `(${order.xeroxFileName})` : ''}
+                      </div>
+                    )}
+                    <div className="row-between" style={{ fontWeight: 800, marginTop: 8 }}>
+                      <span>Total • Payment: {order.paymentStatus}</span>
+                      <span>₹{Number(order.totalAmount).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="row-gap" style={{ marginTop: 12 }}>
+                    {order.status === 'AWAITING_PAYMENT' && (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                          setPayModalOrder(order);
+                          setPaymentMethod(order.vendorQrCodeImage ? 'ONLINE_UPI' : 'COD');
+                        }}
+                      >
+                        💳 Pay Now (QR / COD)
+                      </button>
+                    )}
+                    {order.status === 'READY' && (
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => handleCompleteOrder(order.orderId)}
+                      >
+                        ✓ Confirm Collected / Complete
+                      </button>
+                    )}
+                    {(order.status === 'PENDING' || order.status === 'AWAITING_PAYMENT') && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleCancelOrder(order.orderId)}
+                      >
+                        Cancel Order
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {navTab === 'NOTIFICATIONS' && (
+        <div className="card">
+          <div className="row-between" style={{ marginBottom: 14 }}>
+            <h3 style={{ margin: 0 }}>🔔 All Notifications</h3>
+            {unreadNotifsCount > 0 && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={async () => {
+                  await campusqApi.markAllNotificationsRead();
+                  loadNotifications();
+                }}
+              >
+                Mark all as read
+              </button>
             )}
+          </div>
+          {notifications.length === 0 ? (
+            <p className="muted">No notifications yet.</p>
+          ) : (
+            notifications.map((n) => (
+              <div
+                key={n.id}
+                className={`notif-item ${!n.read ? 'unread' : ''}`}
+                onClick={async () => {
+                  if (!n.read) {
+                    await campusqApi.markNotificationRead(n.id);
+                    loadNotifications();
+                  }
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>{n.title}</div>
+                <div className="muted" style={{ marginTop: 2 }}>{n.message}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {navTab === 'COMPLAINTS' && (
+        <div>
+          <div className="row-between" style={{ marginBottom: 14 }}>
+            <p className="muted" style={{ margin: 0 }}>
+              Report vendor issues directly to your College Admin.
+            </p>
+            {vendors.length > 0 && (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => setComplaintVendor(vendors[0])}
+              >
+                + New Complaint
+              </button>
+            )}
+          </div>
+          {complaints.length === 0 ? (
+            <div className="empty-state">No complaints filed.</div>
+          ) : (
+            <div className="grid-2">
+              {complaints.map((c) => (
+                <div key={c.id} className="card">
+                  <div className="row-between" style={{ marginBottom: 6 }}>
+                    <strong>{c.subject}</strong>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.84rem', marginBottom: 6 }}>
+                    Vendor: <strong>{c.vendorShopName}</strong>
+                    {c.orderId ? ` • Order #${c.orderId}` : ''}
+                  </div>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>{c.message}</p>
+                  {c.adminReply && (
+                    <div className="alert alert-success" style={{ marginBottom: 0 }}>
+                      <strong>Admin Reply:</strong> {c.adminReply}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {navTab === 'PROFILE' && (
+        <div className="card" style={{ maxWidth: 560 }}>
+          <h3 style={{ marginTop: 0 }}>👤 My Campus Profile</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="row-between">
+              <span className="muted">Full Name</span>
+              <strong>{user?.fullName}</strong>
+            </div>
+            <div className="row-between">
+              <span className="muted">Email</span>
+              <strong>{user?.email}</strong>
+            </div>
+            <div className="row-between">
+              <span className="muted">Role</span>
+              <span className={`badge ${user?.role === 'STAFF' ? 'badge-staff' : 'badge-primary'}`}>
+                {user?.role === 'STAFF' ? '★ STAFF PRIORITY' : user?.role}
+              </span>
+            </div>
+            <div className="row-between">
+              <span className="muted">College</span>
+              <strong>
+                {user?.collegeName} ({user?.collegeCode})
+              </strong>
+            </div>
           </div>
         </div>
       )}
@@ -1119,6 +1575,6 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
-    </>
+    </DashboardShell>
   );
 }

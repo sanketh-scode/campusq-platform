@@ -51,10 +51,17 @@ export default function LoginPage() {
   const meta = ROLE_META[selectedPortal];
 
   useEffect(() => {
-    if (!googleClientId || !googleBtnRef.current) return;
+    if (!googleClientId || selectedPortal === 'ADMIN' || !googleBtnRef.current) return;
 
+    let attempts = 0;
     const initGoogle = () => {
-      if (!window.google?.accounts?.id || !googleBtnRef.current) return;
+      if (!window.google?.accounts?.id || !googleBtnRef.current) {
+        if (attempts < 25) {
+          attempts += 1;
+          timer = setTimeout(initGoogle, 200);
+        }
+        return;
+      }
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         callback: async (response) => {
@@ -93,9 +100,9 @@ export default function LoginPage() {
       });
     };
 
-    const timer = setTimeout(initGoogle, 250);
+    let timer = setTimeout(initGoogle, 100);
     return () => clearTimeout(timer);
-  }, [googleClientId]);
+  }, [googleClientId, selectedPortal]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
